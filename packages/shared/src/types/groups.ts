@@ -1,0 +1,3 @@
+export interface GroupRecord { id:string; facebookGroupUrl:string; canonicalGroupUrl:string; friendlyName:string; detectedName?:string|null; location?:string|null; notes?:string|null; enabled:boolean; displayOrder:number; baselineStatus:string; lastSuccessfulMonitorAt?:string|null; lastTestedAt?:string|null; lastTestStatus?:string|null; lastErrorCode?:string|null; lastErrorMessage?:string|null; createdAt:string; updatedAt:string; }
+export interface CreateGroupInput { facebookGroupUrl:string; friendlyName?:string; location?:string; notes?:string; enabled?:boolean; }
+export interface UpdateGroupInput { facebookGroupUrl?:string; friendlyName?:string; location?:string|null; notes?:string|null; enabled?:boolean; }

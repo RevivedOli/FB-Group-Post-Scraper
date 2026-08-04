@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.local-data/
+data/
+browser-profile/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+diagnostics/
+traces/
+screenshots/
+exports/
+.DS_Store

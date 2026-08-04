@@ -1,0 +1,2 @@
+import { useEffect, useState } from 'react'; import { apiGet } from '../api/client'; import { Card, CardContent, Typography } from '@mui/material';
+export function SettingsPage(){const [settings,setSettings]=useState<unknown>(); useEffect(()=>{apiGet('/settings').then(setSettings)},[]); return <Card><CardContent><Typography variant="h4">Settings</Typography><pre>{JSON.stringify(settings,null,2)}</pre></CardContent></Card>}

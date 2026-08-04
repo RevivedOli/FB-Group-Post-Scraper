@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import { clearGroupData, createGroup, deleteGroup, listGroups, reorderGroups, updateGroup } from '../services/groups.service.js';
+import { runSingleGroupMonitor, testGroupAccess } from '../services/group-monitor.service.js';
+export const groupsRouter=Router();
+groupsRouter.get('/',async (_req,res,next)=>{try{res.json(await listGroups());}catch(e){next(e)}});
+groupsRouter.post('/',async (req,res,next)=>{try{res.status(201).json(await createGroup(req.body));}catch(e){next(e)}});
+groupsRouter.patch('/:id',async (req,res,next)=>{try{res.json(await updateGroup(req.params.id,req.body));}catch(e){next(e)}});
+groupsRouter.delete('/:id',async (req,res,next)=>{try{res.json(await deleteGroup(req.params.id));}catch(e){next(e)}});
+groupsRouter.post('/reorder',async (req,res,next)=>{try{res.json(await reorderGroups(req.body.ids));}catch(e){next(e)}});
+groupsRouter.post('/:id/test',async(req,res,next)=>{try{res.json(await testGroupAccess(req.params.id));}catch(e){next(e)}});
+groupsRouter.post('/:id/run',async(req,res,next)=>{try{res.json(await runSingleGroupMonitor(req.params.id));}catch(e){next(e)}});
+groupsRouter.post('/:id/rebaseline',async(req,res,next)=>{try{res.json(await updateGroup(req.params.id,{baselineStatus:'needs_rebaseline'}));}catch(e){next(e)}});
+groupsRouter.post('/:id/clear-data',async(req,res,next)=>{try{res.json(await clearGroupData(req.params.id));}catch(e){next(e)}});

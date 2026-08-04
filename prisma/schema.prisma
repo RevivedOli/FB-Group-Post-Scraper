@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id String @id @default(cuid())
+  facebookGroupUrl String
+  canonicalGroupUrl String @unique
+  facebookGroupId String?
+  friendlyName String
+  detectedName String?
+  location String?
+  notes String?
+  enabled Boolean @default(true)
+  displayOrder Int
+  baselineStatus String @default("never_scanned")
+  baselineCompletedAt DateTime?
+  lastSuccessfulMonitorAt DateTime?
+  lastTestedAt DateTime?
+  lastTestStatus String?
+  lastErrorCode String?
+  lastErrorMessage String?
+  maxPostsPerRun Int?
+  maxScrollActions Int?
+  maxGroupDurationSeconds Int?
+  posts Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Post {
+  id String @id @default(cuid())
+  groupId String
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  facebookPostId String?
+  canonicalPostUrl String @unique
+  authorName String?
+  firstCapturedText String?
+  latestCapturedText String?
+  originalTimestampLabel String?
+  originalPostedAt DateTime?
+  firstDiscoveredAt DateTime @default(now())
+  lastObservedAt DateTime @default(now())
+  hasImages Boolean @default(false)
+  imageCount Int @default(0)
+  ocrStatus String @default("disabled")
+  ocrText String?
+  analysisStatus String @default("not_analysed")
+  reviewStatus String @default("new")
+  monitoringStatus String @default("active")
+  extractionStrategy String?
+  extractionConfidence Float?
+  fieldWarnings Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model ScrapeRun {
+  id            String    @id @default(cuid())
+  groupId       String?
+  runType       String
+  status        String
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  groupsCompleted Int     @default(0)
+  postsInspected Int      @default(0)
+  newPostsSaved Int       @default(0)
+  scrollActions  Int      @default(0)
+  warningCount  Int       @default(0)
+  errorCode     String?
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ScrapeEvent {
+  id              String   @id @default(cuid())
+  scrapeRunId     String?
+  level           String
+  type            String
+  message         String
+  technicalDetail Json?
+  createdAt       DateTime @default(now())
+}
+
+model AnalysisJob {
+  id               String    @id @default(cuid())
+  status           String
+  requestedPostIds Json?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}

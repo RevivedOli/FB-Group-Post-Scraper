@@ -1,0 +1,5 @@
+import type { AppSettings } from '@local-group-monitor/shared';
+import { prisma } from '../db/prisma.js';
+export const defaultSettings: AppSettings = { browser:{ chromeChannel:'chrome', headed:true, pageLoadTimeoutMs:30000, saveScreenshotsOnError:true, saveTracesOnFailure:true }, monitoring:{ delayBetweenGroupsSeconds:10, delayBetweenGroupsVariationPercent:20, delayBetweenScrollsSeconds:5, delayBetweenScrollsVariationPercent:20, baselineMaxPosts:100, baselineMaxPostAgeDays:7, incrementalConsecutiveKnownPosts:5, baselineMaxGroupDurationSeconds:300, incrementalMaxGroupDurationSeconds:120 }, ui:{ theme:'system' } };
+export async function getSettings(): Promise<AppSettings>{ const row = await prisma.setting.findUnique({where:{key:'app'}}); return (row?.value ?? defaultSettings) as AppSettings; }
+export async function updateSettings(value: unknown): Promise<AppSettings>{ return (await prisma.setting.upsert({where:{key:'app'},create:{key:'app',value:value as object},update:{value:value as object}})).value as unknown as AppSettings; }
