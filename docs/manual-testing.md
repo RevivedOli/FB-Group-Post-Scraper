@@ -69,3 +69,18 @@ Cleanup controls:
 1. On the Posts page, use `Delete` on an individual post when you want to remove a bad local capture.
 2. On the Groups page, use `Clear Data` to delete that group's local posts and run history while keeping the group configured.
 3. Use `Delete Group` only when you want to remove the group configuration as well.
+
+Phase 8 manual testing checks post review:
+
+1. Open the Posts page after collecting posts.
+2. Use the `Review`, `Group`, and `Search` controls to narrow the list.
+3. Mark a post as `Useful`, `Review`, or `Ignore` and confirm the status chip updates.
+4. Use `Delete Ignored` only after confirming ignored posts should be removed from local storage.
+
+Phase 9 manual testing checks the referral directory:
+
+1. Open Referral Directory.
+2. Add a referral member with a category and comma-separated keywords.
+3. Click `Generate Matches`.
+4. Confirm suggested matches show the member, category, score, and matched keywords when collected posts contain those terms.
+5. Mark a match `Accept` or `Dismiss` and confirm it moves when the status filter changes.

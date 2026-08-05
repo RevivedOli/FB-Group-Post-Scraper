@@ -55,8 +55,37 @@ model Post {
   extractionStrategy String?
   extractionConfidence Float?
   fieldWarnings Json?
+  referralMatches ReferralMatch[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ReferralMember {
+  id String @id @default(cuid())
+  name String
+  businessName String?
+  category String
+  keywords String
+  notes String?
+  active Boolean @default(true)
+  matches ReferralMatch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReferralMatch {
+  id String @id @default(cuid())
+  postId String
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  referralMemberId String
+  referralMember ReferralMember @relation(fields: [referralMemberId], references: [id], onDelete: Cascade)
+  score Float
+  matchedKeywords Json?
+  status String @default("suggested")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([postId, referralMemberId])
 }
 model Setting {
   key       String   @id

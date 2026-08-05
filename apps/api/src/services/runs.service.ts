@@ -113,6 +113,10 @@ async function processEnabledGroupsRun(runId: string, groups: Awaited<ReturnType
 
   for (const group of groups) {
     if (activeRun?.id === runId && activeRun.cancelled) break;
+    const isBaselineRun = group.baselineStatus === 'never_scanned' || group.baselineStatus === 'needs_rebaseline' || group.baselineStatus === 'baseline_failed';
+    if (isBaselineRun) {
+      await prisma.group.update({ where: { id: group.id }, data: { baselineStatus: 'baseline_in_progress', baselineCompletedAt: null } });
+    }
 
     await prisma.scrapeEvent.create({
       data: { scrapeRunId: runId, level: 'info', type: 'group_started', message: `Checking ${group.friendlyName}` },
@@ -124,6 +128,9 @@ async function processEnabledGroupsRun(runId: string, groups: Awaited<ReturnType
       warningCount += 1;
       errorCode = access.errorCode;
       errorMessage = access.message;
+      if (isBaselineRun) {
+        await prisma.group.update({ where: { id: group.id }, data: { baselineStatus: 'baseline_failed' } });
+      }
     } else {
       const settings = await getSettings();
       const page = await navigateManagedPage(group.canonicalGroupUrl);
@@ -136,6 +143,14 @@ async function processEnabledGroupsRun(runId: string, groups: Awaited<ReturnType
         maxDurationSeconds,
         consecutiveKnownLimit: settings.monitoring.incrementalConsecutiveKnownPosts,
         delayBetweenScrollsMs: settings.monitoring.delayBetweenScrollsSeconds * 1000,
+        ignoreKnownPostStop: isBaselineRun,
+        useRealCursorForPermalinks: settings.browser.useRealCursorForPermalinks,
+        realCursorMoveDurationMs: settings.browser.realCursorMoveDurationMs,
+        realCursorOffsetX: settings.browser.realCursorOffsetX,
+        realCursorOffsetY: settings.browser.realCursorOffsetY,
+        permalinkProbeLimit: settings.browser.permalinkProbeLimit,
+        permalinkProbeDwellMs: settings.browser.permalinkProbeDwellMs,
+        permalinkProbePauseMs: settings.browser.permalinkProbePauseMs,
         shouldCancel: () => activeRun?.id === runId && activeRun.cancelled,
         onProgress: async (progress) => {
           await prisma.scrapeRun.update({
@@ -152,7 +167,14 @@ async function processEnabledGroupsRun(runId: string, groups: Awaited<ReturnType
       postsInspected += crawl.postsInspected;
       newPostsSaved += crawl.newPostsSaved;
       scrollActions += crawl.scrollActions;
-      await prisma.group.update({ where: { id: group.id }, data: { lastSuccessfulMonitorAt: new Date() } });
+      const completedAt = new Date();
+      await prisma.group.update({
+        where: { id: group.id },
+        data: {
+          lastSuccessfulMonitorAt: completedAt,
+          ...(isBaselineRun ? { baselineStatus: 'baseline_completed', baselineCompletedAt: completedAt } : {}),
+        },
+      });
       await prisma.scrapeEvent.create({
         data: {
           scrapeRunId: runId,

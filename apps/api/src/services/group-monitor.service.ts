@@ -89,6 +89,10 @@ export async function runSingleGroupMonitor(groupId: string) {
 
   try {
     const group = await prisma.group.findUniqueOrThrow({ where: { id: groupId } });
+    const isBaselineRun = group.baselineStatus === 'never_scanned' || group.baselineStatus === 'needs_rebaseline' || group.baselineStatus === 'baseline_failed';
+    if (isBaselineRun) {
+      await prisma.group.update({ where: { id: groupId }, data: { baselineStatus: 'baseline_in_progress', baselineCompletedAt: null } });
+    }
     const access = await testGroupAccess(groupId);
     const completedStatus = access.status === 'accessible' ? 'completed' : 'blocked';
     const warningCount = access.status === 'accessible' ? 0 : 1;
@@ -118,6 +122,14 @@ export async function runSingleGroupMonitor(groupId: string) {
         maxDurationSeconds,
         consecutiveKnownLimit: settings.monitoring.incrementalConsecutiveKnownPosts,
         delayBetweenScrollsMs: settings.monitoring.delayBetweenScrollsSeconds * 1000,
+        ignoreKnownPostStop: isBaselineRun,
+        useRealCursorForPermalinks: settings.browser.useRealCursorForPermalinks,
+        realCursorMoveDurationMs: settings.browser.realCursorMoveDurationMs,
+        realCursorOffsetX: settings.browser.realCursorOffsetX,
+        realCursorOffsetY: settings.browser.realCursorOffsetY,
+        permalinkProbeLimit: settings.browser.permalinkProbeLimit,
+        permalinkProbeDwellMs: settings.browser.permalinkProbeDwellMs,
+        permalinkProbePauseMs: settings.browser.permalinkProbePauseMs,
         onProgress: async (progress) => {
           await prisma.scrapeRun.update({
             where: { id: run.id },
@@ -159,7 +171,16 @@ export async function runSingleGroupMonitor(groupId: string) {
       },
     });
     if (access.status === 'accessible') {
-      await prisma.group.update({ where: { id: groupId }, data: { lastSuccessfulMonitorAt: new Date() } });
+      const completedAt = new Date();
+      await prisma.group.update({
+        where: { id: groupId },
+        data: {
+          lastSuccessfulMonitorAt: completedAt,
+          ...(isBaselineRun ? { baselineStatus: 'baseline_completed', baselineCompletedAt: completedAt } : {}),
+        },
+      });
+    } else if (isBaselineRun) {
+      await prisma.group.update({ where: { id: groupId }, data: { baselineStatus: 'baseline_failed' } });
     }
     return { run: completedRun, access, postsInspected, newPostsSaved };
   } catch (error) {
@@ -171,6 +192,7 @@ export async function runSingleGroupMonitor(groupId: string) {
     await prisma.scrapeEvent.create({
       data: { scrapeRunId: run.id, level: 'error', type: 'single_group_run_failed', message, technicalDetail: { groupId } },
     });
+    await prisma.group.update({ where: { id: groupId }, data: { baselineStatus: 'baseline_failed', lastErrorCode: 'SINGLE_GROUP_RUN_FAILED', lastErrorMessage: message } }).catch(() => undefined);
     return { run: failedRun, postsInspected: 0, newPostsSaved: 0 };
   }
 }

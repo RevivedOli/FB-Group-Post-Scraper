@@ -18,7 +18,18 @@ export interface PostRecord {
   extractionConfidence?: number | null;
 }
 
+export interface PostDetailResponse {
+  post: PostRecord & Record<string, unknown>;
+}
+
 export interface PostListResponse {
   items: PostRecord[];
   total: number;
+  counts?: {
+    all: number;
+    new: number;
+    requires_review: number;
+    useful: number;
+    ignored: number;
+  };
 }

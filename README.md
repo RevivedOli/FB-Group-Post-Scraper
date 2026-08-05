@@ -1,6 +1,6 @@
 # Local Group Monitor
 
-Local-first Facebook group monitoring application scaffold. Phase 1 includes the TypeScript monorepo, Express API, Prisma/SQLite schema, Material UI shell, settings, and groups CRUD. Phase 2 adds a manually controlled local Facebook browser session using an isolated persistent Chrome profile. Phase 3 adds group access testing and single-group run records. Phase 4 adds dashboard run summaries, live activity history, and all-enabled-group monitoring runs. Phase 5 adds bounded visible-post extraction and local post review. Phase 6 adds real crawl controls, progress polling, and run cancellation. Phase 7 improves parser quality with post author, timestamp, permalink, image-count, confidence, and warning metadata.
+Local-first Facebook group monitoring application scaffold. Phase 1 includes the TypeScript monorepo, Express API, Prisma/SQLite schema, Material UI shell, settings, and groups CRUD. Phase 2 adds a manually controlled local Facebook browser session using an isolated persistent Chrome profile. Phase 3 adds group access testing and single-group run records. Phase 4 adds dashboard run summaries, live activity history, and all-enabled-group monitoring runs. Phase 5 adds bounded visible-post extraction and local post review. Phase 6 adds real crawl controls, progress polling, and run cancellation. Phase 7 improves parser quality with post author, timestamp, permalink, image-count, confidence, and warning metadata. Phase 8 adds a post review queue with filters, status actions, and local cleanup controls. Phase 9 adds a local referral directory and deterministic keyword matching.
 
 ## Development
 
@@ -47,3 +47,11 @@ The crawler stops when it reaches max posts, max scroll actions, max duration, e
 Post extraction now parses Facebook group permalink variants, stores the best author/timestamp/image metadata it can find, and records extraction confidence plus field warnings for review. Existing posts are updated when seen again so parser improvements can enrich older local records.
 
 When a visible post does not expose a permalink immediately, the crawler hovers timestamp-like elements and rereads the post DOM before falling back to a local hash. Facebook can still show a browser status-bar URL without exposing it as a readable page `href`, so hash fallbacks remain possible.
+
+## Phase 8 Review Queue
+
+The Posts page can filter by review status, group, and search text. Individual posts can be marked `useful`, `requires_review`, or `ignored`, and ignored posts can be deleted in bulk from local storage.
+
+## Phase 9 Referral Directory
+
+The Referral Directory page stores local referral members with categories and comma-separated keywords. Matching runs compare active members against locally collected, non-ignored posts and produce suggested matches with keyword evidence and scores. No AI or external service is used for matching in this phase.

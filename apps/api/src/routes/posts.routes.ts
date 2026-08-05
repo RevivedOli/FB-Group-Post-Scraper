@@ -1,11 +1,42 @@
 import { Router } from 'express';
-import { deletePost, listPosts } from '../services/posts.service.js';
+import { deleteIgnoredPosts, deletePost, getPostDetail, listPosts, updatePostReviewStatus } from '../services/posts.service.js';
 
 export const postsRouter = Router();
 
 postsRouter.get('/', async (req, res, next) => {
   try {
-    res.json(await listPosts(Number(req.query.page ?? 1), Number(req.query.pageSize ?? 25)));
+    res.json(await listPosts({
+      page: Number(req.query.page ?? 1),
+      pageSize: Number(req.query.pageSize ?? 25),
+      reviewStatus: typeof req.query.reviewStatus === 'string' ? req.query.reviewStatus : undefined,
+      groupId: typeof req.query.groupId === 'string' ? req.query.groupId : undefined,
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      minConfidence: typeof req.query.minConfidence === 'string' ? Number(req.query.minConfidence) : undefined,
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+postsRouter.get('/:id', async (req, res, next) => {
+  try {
+    res.json(await getPostDetail(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+postsRouter.patch('/:id/review', async (req, res, next) => {
+  try {
+    res.json(await updatePostReviewStatus(req.params.id, req.body.reviewStatus));
+  } catch (error) {
+    next(error);
+  }
+});
+
+postsRouter.delete('/ignored/all', async (_req, res, next) => {
+  try {
+    res.json(await deleteIgnoredPosts());
   } catch (error) {
     next(error);
   }

@@ -6,12 +6,30 @@ import {
   openFacebookHome,
   openFacebookLogin,
 } from '../services/browser-session.service.js';
+import { getRealCursorCapability } from '../services/real-cursor.service.js';
+import { testRealCursorMovement } from '../services/real-cursor.service.js';
 
 export const browserRouter = Router();
 
 browserRouter.get('/status', async (_req, res, next) => {
   try {
     res.json(await getBrowserStatus());
+  } catch (error) {
+    next(error);
+  }
+});
+
+browserRouter.get('/cursor-capability', async (_req, res, next) => {
+  try {
+    res.json(await getRealCursorCapability());
+  } catch (error) {
+    next(error);
+  }
+});
+
+browserRouter.post('/test-cursor', async (_req, res, next) => {
+  try {
+    res.json(await testRealCursorMovement());
   } catch (error) {
     next(error);
   }

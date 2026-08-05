@@ -16,4 +16,8 @@ Phase 6 records crawl progress, scroll counts, stop reasons, and cancellation ev
 
 Phase 7 stores additional parser metadata locally, including visible author names, parsed or raw timestamp labels, image counts, permalink identifiers, extraction confidence, and field warnings.
 
+Phase 8 stores local human review status for posts. Review actions do not transmit post content or review decisions outside the local application.
+
+Phase 9 stores referral directory members, keyword lists, and post-match decisions in the local SQLite database. Matching is deterministic and local-only.
+
 Later phases must keep browser profile data, diagnostics, databases, screenshots, traces, and exports out of Git.
