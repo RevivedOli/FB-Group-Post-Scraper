@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import {
+  applyReferralCsvImport,
   createReferralMember,
   deleteReferralMember,
   generateReferralMatches,
+  getReferralCsvTemplate,
   getReferralDirectory,
+  listMemberAiMatches,
   listReferralMatches,
+  previewReferralCsvImport,
+  updateAiMemberMatchStatus,
   updateReferralMatchStatus,
   updateReferralMember,
 } from '../services/referrals.service.js';
@@ -22,6 +27,32 @@ referralsRouter.get('/', async (_req, res, next) => {
 referralsRouter.post('/', async (req, res, next) => {
   try {
     res.status(201).json(await createReferralMember(req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+referralsRouter.get('/csv-template', async (_req, res, next) => {
+  try {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="referral-directory-template.csv"');
+    res.send(getReferralCsvTemplate());
+  } catch (error) {
+    next(error);
+  }
+});
+
+referralsRouter.post('/csv-preview', async (req, res, next) => {
+  try {
+    res.json(await previewReferralCsvImport(String(req.body?.csv ?? '')));
+  } catch (error) {
+    next(error);
+  }
+});
+
+referralsRouter.post('/csv-import', async (req, res, next) => {
+  try {
+    res.json(await applyReferralCsvImport(String(req.body?.csv ?? ''), req.body?.mode === 'overwrite' ? 'overwrite' : 'skip'));
   } catch (error) {
     next(error);
   }
@@ -66,6 +97,28 @@ referralsRouter.get('/matches', async (req, res, next) => {
 referralsRouter.patch('/matches/:id', async (req, res, next) => {
   try {
     res.json(await updateReferralMatchStatus(req.params.id, req.body.status));
+  } catch (error) {
+    next(error);
+  }
+});
+
+referralsRouter.get('/:id/ai-matches', async (req, res, next) => {
+  try {
+    res.json(await listMemberAiMatches(req.params.id, {
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      minScore: typeof req.query.minScore === 'string' ? Number(req.query.minScore) : undefined,
+      status: typeof req.query.status === 'string' ? req.query.status : undefined,
+      page: Number(req.query.page ?? 1),
+      pageSize: Number(req.query.pageSize ?? 25),
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+referralsRouter.patch('/ai-matches/:id', async (req, res, next) => {
+  try {
+    res.json(await updateAiMemberMatchStatus(req.params.id, req.body));
   } catch (error) {
     next(error);
   }

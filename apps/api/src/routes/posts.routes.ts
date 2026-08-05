@@ -12,6 +12,9 @@ postsRouter.get('/', async (req, res, next) => {
       groupId: typeof req.query.groupId === 'string' ? req.query.groupId : undefined,
       search: typeof req.query.search === 'string' ? req.query.search : undefined,
       minConfidence: typeof req.query.minConfidence === 'string' ? Number(req.query.minConfidence) : undefined,
+      aiReferralOnly: req.query.aiReferralOnly === 'true',
+      aiIntent: typeof req.query.aiIntent === 'string' ? req.query.aiIntent : undefined,
+      aiMemberId: typeof req.query.aiMemberId === 'string' ? req.query.aiMemberId : undefined,
     }));
   } catch (error) {
     next(error);

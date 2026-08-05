@@ -9,11 +9,16 @@ import {
   CardContent,
   Chip,
   Dialog,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   DialogContent,
   DialogTitle,
-  Divider,
+  FormControlLabel,
+  Link,
   MenuItem,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -33,11 +38,35 @@ interface PostWithGroup {
   imageCount: number;
   extractionConfidence?: number | null;
   group?: { friendlyName: string };
+  aiAssessments?: AiAssessment[];
 }
 
 interface GroupOption {
   id: string;
   friendlyName: string;
+}
+
+interface MemberOption {
+  id: string;
+  name: string;
+  category: string;
+}
+
+interface AiAssessment {
+  id: string;
+  status: string;
+  intent?: string | null;
+  isReferralOpportunity?: boolean | null;
+  confidence?: number | null;
+  summary?: string | null;
+  errorMessage?: string | null;
+  memberMatches?: Array<{
+    id: string;
+    scorePercent: string;
+    reason?: string | null;
+    suggestedIntro?: string | null;
+    referralMember?: { id: string; name: string; category: string; businessName?: string | null; facebookName?: string | null; facebookProfileUrl?: string | null };
+  }>;
 }
 
 type ReviewFilter = 'all' | typeof reviewStatuses[number];
@@ -82,14 +111,29 @@ function RawPostData({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+async function copyText(value: string) {
+  await navigator.clipboard.writeText(value);
+}
+
+function formatAiRunMessage(result: Record<string, unknown>) {
+  const reason = typeof result.reason === 'string' ? result.reason.replaceAll('_', ' ') : undefined;
+  if (result.queued === true) return 'AI analysis queued and started.';
+  if (reason) return `AI analysis not queued: ${reason}.`;
+  return 'AI analysis request sent.';
+}
+
 export function PostsPage() {
   const [posts, setPosts] = useState<PostWithGroup[]>([]);
   const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
   const [total, setTotal] = useState(0);
   const [counts, setCounts] = useState<PostListResponse['counts']>();
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [groupFilter, setGroupFilter] = useState('all');
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
+  const [aiReferralOnly, setAiReferralOnly] = useState(false);
+  const [aiIntent, setAiIntent] = useState('all');
+  const [aiMemberId, setAiMemberId] = useState('all');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string>();
   const [message, setMessage] = useState<string>();
@@ -101,6 +145,9 @@ export function PostsPage() {
   const load = () => {
     const params = new URLSearchParams({ reviewStatus: reviewFilter, groupId: groupFilter });
     if (confidenceFilter !== 'all') params.set('minConfidence', confidenceFilter);
+    if (aiReferralOnly) params.set('aiReferralOnly', 'true');
+    if (aiIntent !== 'all') params.set('aiIntent', aiIntent);
+    if (aiMemberId !== 'all') params.set('aiMemberId', aiMemberId);
     if (search.trim()) params.set('search', search.trim());
     return apiGet<PostListResponse>(`/posts?${params.toString()}`)
       .then((result) => {
@@ -113,11 +160,12 @@ export function PostsPage() {
 
   useEffect(() => {
     void apiGet<GroupOption[]>('/groups').then(setGroups).catch(() => setGroups([]));
+    void apiGet<{ members: MemberOption[] }>('/referrals').then((result) => setMembers(result.members)).catch(() => setMembers([]));
   }, []);
 
   useEffect(() => {
     void load();
-  }, [reviewFilter, groupFilter, confidenceFilter]);
+  }, [reviewFilter, groupFilter, confidenceFilter, aiReferralOnly, aiIntent, aiMemberId]);
 
   async function removePost(post: PostWithGroup) {
     if (!window.confirm('Delete this collected post from the local database?')) return;
@@ -179,6 +227,23 @@ export function PostsPage() {
     }
   }
 
+  async function runAi(post: PostWithGroup, force = false) {
+    setBusy(`${post.id}:ai`);
+    setMessage(undefined);
+    setError(undefined);
+    try {
+      const result = await apiSend<Record<string, unknown>>(`/ai/posts/${post.id}/run`, 'POST', { force, process: true });
+      setMessage(formatAiRunMessage(result));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  const latestAiFromRaw = rawPost?.aiAssessments && Array.isArray(rawPost.aiAssessments) ? rawPost.aiAssessments[0] as AiAssessment | undefined : undefined;
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
@@ -211,6 +276,18 @@ export function PostsPage() {
               <MenuItem value="0.8">80%+</MenuItem>
               <MenuItem value="0.9">90%+</MenuItem>
             </TextField>
+            <TextField select size="small" label="AI intent" value={aiIntent} onChange={(event) => setAiIntent(event.target.value)} sx={{ width: 190 }}>
+              <MenuItem value="all">All AI intents</MenuItem>
+              <MenuItem value="looking_for_help">Looking for help</MenuItem>
+              <MenuItem value="advertising">Advertising</MenuItem>
+              <MenuItem value="discussion">Discussion</MenuItem>
+              <MenuItem value="irrelevant">Irrelevant</MenuItem>
+            </TextField>
+            <TextField select size="small" label="Matched member" value={aiMemberId} onChange={(event) => setAiMemberId(event.target.value)} sx={{ minWidth: 220 }}>
+              <MenuItem value="all">Any member</MenuItem>
+              {members.map((member) => <MenuItem key={member.id} value={member.id}>{member.name} · {member.category}</MenuItem>)}
+            </TextField>
+            <FormControlLabel control={<Switch checked={aiReferralOnly} onChange={(event) => setAiReferralOnly(event.target.checked)} />} label="AI referrals only" />
             <TextField size="small" label="Search" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void load(); }} sx={{ minWidth: 260 }} />
             <Button variant="contained" onClick={() => void load()}>Search</Button>
           </Stack>
@@ -231,6 +308,13 @@ export function PostsPage() {
                   {post.authorName && <Chip size="small" label={post.authorName} />}
                   <Chip size="small" label={post.reviewStatus} color={post.reviewStatus === 'useful' ? 'success' : post.reviewStatus === 'ignored' ? 'default' : post.reviewStatus === 'requires_review' ? 'warning' : 'primary'} />
                   <Chip size="small" label={post.analysisStatus} />
+                  {post.aiAssessments?.[0] && (
+                    <Chip
+                      size="small"
+                      label={`AI: ${post.aiAssessments[0].status === 'completed' ? post.aiAssessments[0].intent ?? 'done' : post.aiAssessments[0].status}`}
+                      color={post.aiAssessments[0].isReferralOpportunity ? 'success' : post.aiAssessments[0].status === 'failed' ? 'error' : 'default'}
+                    />
+                  )}
                   {post.originalTimestampLabel && <Chip size="small" label={post.originalTimestampLabel} />}
                   <Chip size="small" label={post.hasImages ? `${post.imageCount} image(s)` : 'No images'} />
                   {typeof post.extractionConfidence === 'number' && <Chip size="small" label={`Confidence ${Math.round(post.extractionConfidence * 100)}%`} />}
@@ -238,6 +322,9 @@ export function PostsPage() {
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button size="small" disabled={Boolean(busy)} onClick={() => void openRawData(post)}>
                     {busy === `${post.id}:raw` ? 'Loading...' : 'Raw Data'}
+                  </Button>
+                  <Button size="small" disabled={Boolean(busy)} onClick={() => void runAi(post, Boolean(post.aiAssessments?.length))}>
+                    {busy === `${post.id}:ai` ? 'Running...' : post.aiAssessments?.length ? 'Rerun AI' : 'Run AI'}
                   </Button>
                   <Button size="small" disabled={Boolean(busy)} onClick={() => void updateReview(post, 'useful')}>Useful</Button>
                   <Button size="small" color="warning" disabled={Boolean(busy)} onClick={() => void updateReview(post, 'requires_review')}>Review</Button>
@@ -248,7 +335,15 @@ export function PostsPage() {
                 </Stack>
               </Stack>
               <Typography>{post.latestCapturedText || 'No text captured.'}</Typography>
-              <Typography color="text.secondary">{post.canonicalPostUrl}</Typography>
+              {post.aiAssessments?.[0]?.summary && <Typography color="text.secondary">AI: {post.aiAssessments[0].summary}</Typography>}
+              {post.aiAssessments?.[0]?.memberMatches && post.aiAssessments[0].memberMatches.length > 0 && (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {post.aiAssessments[0].memberMatches.map((match) => (
+                    <Chip key={match.id} size="small" label={`${match.referralMember?.name ?? 'Member'} ${match.scorePercent}`} />
+                  ))}
+                </Stack>
+              )}
+              <Link href={post.canonicalPostUrl} target="_blank" color="text.secondary" underline="hover">{post.canonicalPostUrl}</Link>
               <Typography color="text.secondary">
                 Posted {post.originalPostedAt ? new Date(post.originalPostedAt).toLocaleString() : 'Unknown'} · Discovered {new Date(post.firstDiscoveredAt).toLocaleString()}
               </Typography>
@@ -258,16 +353,71 @@ export function PostsPage() {
       ))}
 
       <Dialog open={Boolean(rawPost)} onClose={() => setRawPost(undefined)} maxWidth="md" fullWidth>
-        <DialogTitle>Post Raw Data</DialogTitle>
+        <DialogTitle>Post Details</DialogTitle>
         <DialogContent dividers>
           {rawPost && (
             <Stack spacing={2}>
-              <RawPostData data={rawPost} />
-              <Divider />
-              <Typography variant="h6">Full JSON</Typography>
-              <Box component="pre" sx={{ bgcolor: 'grey.100', borderRadius: 1, fontSize: 12, overflow: 'auto', p: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {rawJson}
-              </Box>
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack spacing={1.25}>
+                    <Typography variant="h6">Captured Post</Typography>
+                    <Typography>{String(rawPost.latestCapturedText ?? 'No text captured.')}</Typography>
+                    {typeof rawPost.canonicalPostUrl === 'string' && (
+                      <Link href={rawPost.canonicalPostUrl} target="_blank" underline="hover">{rawPost.canonicalPostUrl}</Link>
+                    )}
+                    <Typography color="text.secondary">
+                      {String(rawPost.authorName ?? 'Unknown author')} · {typeof rawPost.firstDiscoveredAt === 'string' ? new Date(rawPost.firstDiscoveredAt).toLocaleString() : 'Unknown date'}
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+              {latestAiFromRaw && (
+                <Card variant="outlined">
+                  <CardContent>
+                    <Stack spacing={1.25}>
+                      <Typography variant="h6">Latest AI Assessment</Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Chip size="small" label={latestAiFromRaw.status} />
+                        {latestAiFromRaw.intent && <Chip size="small" label={latestAiFromRaw.intent} />}
+                        {typeof latestAiFromRaw.confidence === 'number' && <Chip size="small" label={`${Math.round(latestAiFromRaw.confidence * 100)}% confidence`} />}
+                      </Stack>
+                      {latestAiFromRaw.summary && <Typography>{latestAiFromRaw.summary}</Typography>}
+                      {latestAiFromRaw.errorMessage && <Alert severity="error">{latestAiFromRaw.errorMessage}</Alert>}
+                      {latestAiFromRaw.memberMatches && latestAiFromRaw.memberMatches.length > 0 && latestAiFromRaw.memberMatches.map((match) => (
+                        <Card key={match.id} variant="outlined">
+                          <CardContent>
+                            <Stack spacing={0.75}>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                <Chip size="small" label={match.referralMember?.name ?? 'Member'} />
+                                <Chip size="small" label={match.referralMember?.category ?? 'Category'} />
+                                <Chip size="small" label={match.scorePercent} />
+                              </Stack>
+                              {match.reason && <Typography>{match.reason}</Typography>}
+                              {match.suggestedIntro && <Typography color="text.secondary">{match.suggestedIntro}</Typography>}
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {match.referralMember?.facebookName && <Button size="small" onClick={() => void copyText(match.referralMember?.facebookName ?? '')}>Copy FB Name</Button>}
+                                {match.referralMember?.facebookProfileUrl && <Button size="small" href={match.referralMember.facebookProfileUrl} target="_blank">Open Profile</Button>}
+                              </Stack>
+                            </Stack>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+              <Accordion>
+                <AccordionSummary>Advanced raw data</AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    <RawPostData data={rawPost} />
+                    <Typography variant="h6">Full JSON</Typography>
+                    <Box component="pre" sx={{ bgcolor: 'grey.100', borderRadius: 1, fontSize: 12, overflow: 'auto', p: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {rawJson}
+                    </Box>
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
             </Stack>
           )}
         </DialogContent>

@@ -56,6 +56,7 @@ model Post {
   extractionConfidence Float?
   fieldWarnings Json?
   referralMatches ReferralMatch[]
+  aiAssessments PostAiAssessment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -64,11 +65,17 @@ model ReferralMember {
   id String @id @default(cuid())
   name String
   businessName String?
+  facebookName String?
+  facebookProfileUrl String?
   category String
   keywords String
+  servicesOffered String?
+  idealReferral String?
+  negativeKeywords String?
   notes String?
   active Boolean @default(true)
   matches ReferralMatch[]
+  aiMemberMatches AiMemberMatch[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -130,4 +137,59 @@ model AnalysisJob {
   errorMessage     String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+}
+
+model PostAiAssessment {
+  id String @id @default(cuid())
+  postId String
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  status String @default("pending")
+  provider String?
+  model String?
+  inputTokens Int?
+  outputTokens Int?
+  totalTokens Int?
+  estimatedCostUsd Float?
+  durationMs Int?
+  promptVersion String
+  promptText String?
+  renderedPrompt String?
+  inputPayload Json?
+  rawResponse Json?
+  parsed Json?
+  intent String?
+  isReferralOpportunity Boolean?
+  confidence Float?
+  summary String?
+  errorMessage String?
+  startedAt DateTime?
+  completedAt DateTime?
+  memberMatches AiMemberMatch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([status])
+  @@index([promptVersion])
+}
+
+model AiMemberMatch {
+  id String @id @default(cuid())
+  assessmentId String
+  assessment PostAiAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  referralMemberId String
+  referralMember ReferralMember @relation(fields: [referralMemberId], references: [id], onDelete: Cascade)
+  score Float
+  scorePercent String
+  reason String?
+  suggestedIntro String?
+  status String @default("new")
+  copiedAt DateTime?
+  introducedAt DateTime?
+  dismissedAt DateTime?
+  note String?
+  createdAt DateTime @default(now())
+
+  @@unique([assessmentId, referralMemberId])
+  @@index([referralMemberId])
 }
