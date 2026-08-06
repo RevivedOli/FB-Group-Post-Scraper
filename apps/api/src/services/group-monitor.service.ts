@@ -57,12 +57,14 @@ async function classifyGroupPage(page: Page): Promise<{ status: GroupAccessStatu
   return { status: 'unknown', message: 'The browser opened Facebook, but the group access state was not clear.', errorCode: 'ACCESS_UNKNOWN' };
 }
 
-export async function testGroupAccess(groupId: string): Promise<GroupAccessResult> {
+export async function testGroupAccess(groupId: string, options: {
+  onNavigationRetry?: (info: { url: string; attempt: number; maxAttempts: number; error: string }) => void | Promise<void>;
+} = {}): Promise<GroupAccessResult> {
   const group = await prisma.group.findUniqueOrThrow({ where: { id: groupId } });
   const checkedAt = new Date();
 
   try {
-    const page = await navigateManagedPage(group.canonicalGroupUrl);
+    const page = await navigateManagedPage(group.canonicalGroupUrl, { onRetry: options.onNavigationRetry });
     const result = await classifyGroupPage(page);
     await prisma.group.update({
       where: { id: group.id },
@@ -112,7 +114,18 @@ export async function runSingleGroupMonitor(groupId: string) {
 
     if (access.status === 'accessible') {
       const settings = await getSettings();
-      const page = await navigateManagedPage(group.canonicalGroupUrl);
+      const page = await navigateManagedPage(group.canonicalGroupUrl, {
+        onRetry: async (info) => {
+          await prisma.scrapeEvent.create({
+            data: {
+              scrapeRunId: run.id,
+              level: 'warn',
+              type: 'navigation_retry',
+              message: `${group.friendlyName}: page load timed out; refreshing and retrying (attempt ${info.attempt + 1}/${info.maxAttempts}).`,
+            },
+          });
+        },
+      });
       const maxPosts = group.maxPostsPerRun ?? settings.monitoring.baselineMaxPosts;
       const maxScrollActions = group.maxScrollActions ?? 20;
       const maxDurationSeconds = group.maxGroupDurationSeconds ?? settings.monitoring.baselineMaxGroupDurationSeconds;

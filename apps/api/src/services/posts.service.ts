@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { Page } from 'playwright-core';
 import { reviewStatuses } from '@local-group-monitor/shared';
 import { prisma } from '../db/prisma.js';
+import { queuePostAfterScrape } from './ai-assessment.service.js';
 import { parsePostCandidate } from './post-parser.js';
 import { moveRealCursorToPagePoint } from './real-cursor.service.js';
 
@@ -798,7 +799,7 @@ export async function saveExtractedPosts(groupId: string, posts: ExtractedPostCa
     else knownPostsSeen += 1;
 
     if (existing && existing.canonicalPostUrl !== post.canonicalPostUrl) {
-      await prisma.post.update({
+      const updatedPost = await prisma.post.update({
         where: { id: existing.id },
         data: {
           facebookPostId: post.facebookPostId ?? existing.facebookPostId,
@@ -815,10 +816,11 @@ export async function saveExtractedPosts(groupId: string, posts: ExtractedPostCa
           fieldWarnings: post.fieldWarnings,
         },
       });
+      void queuePostAfterScrape(updatedPost.id);
       continue;
     }
 
-    await prisma.post.upsert({
+    const savedPost = await prisma.post.upsert({
       where: { canonicalPostUrl: post.canonicalPostUrl },
       create: {
         groupId,
@@ -849,6 +851,7 @@ export async function saveExtractedPosts(groupId: string, posts: ExtractedPostCa
         fieldWarnings: post.fieldWarnings,
       },
     });
+    void queuePostAfterScrape(savedPost.id);
   }
 
   return { postsInspected: posts.length, newPostsSaved, knownPostsSeen };
@@ -993,6 +996,9 @@ interface ListPostsOptions {
   groupId?: string;
   search?: string;
   minConfidence?: number;
+  aiReferralOnly?: boolean;
+  aiIntent?: string;
+  aiMemberId?: string;
 }
 
 function buildPostWhere(options: ListPostsOptions) {
@@ -1000,6 +1006,7 @@ function buildPostWhere(options: ListPostsOptions) {
     reviewStatus?: string;
     groupId?: string;
     extractionConfidence?: { gte: number };
+    aiAssessments?: { some: Record<string, unknown> };
     OR?: Array<{ latestCapturedText?: { contains: string }; authorName?: { contains: string }; canonicalPostUrl?: { contains: string } }>;
   } = {};
 
@@ -1007,6 +1014,17 @@ function buildPostWhere(options: ListPostsOptions) {
   if (options.groupId && options.groupId !== 'all') where.groupId = options.groupId;
   if (typeof options.minConfidence === 'number' && Number.isFinite(options.minConfidence) && options.minConfidence > 0) {
     where.extractionConfidence = { gte: Math.min(1, Math.max(0, options.minConfidence)) };
+  }
+  const aiFilter: Record<string, unknown> = {};
+  if (options.aiReferralOnly) aiFilter.isReferralOpportunity = true;
+  if (options.aiIntent && options.aiIntent !== 'all') aiFilter.intent = options.aiIntent;
+  if (options.aiMemberId && options.aiMemberId !== 'all') {
+    aiFilter.memberMatches = { some: { referralMemberId: options.aiMemberId } };
+  } else if (options.aiReferralOnly) {
+    aiFilter.memberMatches = { some: {} };
+  }
+  if (Object.keys(aiFilter).length > 0) {
+    where.aiAssessments = { some: { status: 'completed', ...aiFilter } };
   }
   if (options.search?.trim()) {
     const term = options.search.trim();
@@ -1031,7 +1049,45 @@ export async function listPosts(options: ListPostsOptions = {}) {
       orderBy: { firstDiscoveredAt: 'desc' },
       skip,
       take: pageSize,
-      include: { group: { select: { friendlyName: true } } },
+      include: {
+        group: { select: { friendlyName: true } },
+        aiAssessments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            intent: true,
+            isReferralOpportunity: true,
+            confidence: true,
+            summary: true,
+            errorMessage: true,
+            createdAt: true,
+            completedAt: true,
+            memberMatches: {
+              orderBy: { score: 'desc' },
+              select: {
+                id: true,
+                score: true,
+                scorePercent: true,
+                reason: true,
+                suggestedIntro: true,
+                status: true,
+                referralMember: {
+                  select: {
+                    id: true,
+                    name: true,
+                    businessName: true,
+                    facebookName: true,
+                    facebookProfileUrl: true,
+                    category: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     }),
     prisma.post.count({ where }),
     prisma.post.count(),
@@ -1061,6 +1117,10 @@ export async function getPostDetail(id: string) {
       referralMatches: {
         include: { referralMember: true },
         orderBy: { createdAt: 'desc' },
+      },
+      aiAssessments: {
+        orderBy: { createdAt: 'desc' },
+        include: { memberMatches: { include: { referralMember: true }, orderBy: { score: 'desc' } } },
       },
     },
   });

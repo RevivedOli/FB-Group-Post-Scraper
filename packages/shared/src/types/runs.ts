@@ -3,6 +3,7 @@ export interface RunSummary {
   currentGroup: string;
   groupsCompleted: number;
   totalGroups: number;
+  remainingGroups?: number;
   postsInspected: number;
   newPostsSaved: number;
   scrollActions: number;
@@ -10,6 +11,15 @@ export interface RunSummary {
   lastRunId?: string;
   lastRunStartedAt?: string;
   lastRunCompletedAt?: string;
+}
+
+export interface RunStartOptions {
+  enabledCount: number;
+  remainingCount: number;
+  remainingGroups: Array<{ id: string; friendlyName: string }>;
+  lastAllRunStatus?: string | null;
+  lastAllRunGroupsCompleted?: number;
+  lastAllRunStartedAt?: string | null;
 }
 
 export interface RunEventRecord {

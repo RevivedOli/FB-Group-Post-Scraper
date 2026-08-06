@@ -8,6 +8,7 @@
     "build": "npm run build --workspace @local-group-monitor/shared && npm run build --workspace @local-group-monitor/api && npm run build --workspace @local-group-monitor/web",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspace @local-group-monitor/shared && npm run typecheck --workspace @local-group-monitor/api && npm run typecheck --workspace @local-group-monitor/web",
+    "db:migrate": "node scripts/db-migrate.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

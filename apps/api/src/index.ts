@@ -1,20 +1,63 @@
 import './config/env.js';
 import { app } from './app.js';
 import { env } from './config/env.js';
+import { assertAiSchemaReady, SchemaOutOfDateError } from './db/schema-preflight.js';
+import { dedupeAiMemberMatches, resumeAiQueueIfNeeded } from './services/ai-assessment.service.js';
+import { recoverOrphanedScrapeRuns } from './services/runs.service.js';
 
-const server = app.listen(env.port, () => {
-  console.log(`API listening on http://localhost:${env.port}`);
-});
+async function start() {
+  try {
+    await assertAiSchemaReady();
+  } catch (error) {
+    if (error instanceof SchemaOutOfDateError) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
 
-function shutdown() {
-  server.closeAllConnections?.();
-  server.close(() => {
-    process.exit(0);
+  try {
+    const dedupe = await dedupeAiMemberMatches();
+    if (dedupe.removed > 0) {
+      console.log(`Removed ${dedupe.removed} duplicate AI member match(es).`);
+    }
+  } catch (error) {
+    console.error('AI member match dedupe failed:', error);
+  }
+
+  try {
+    const recovered = await recoverOrphanedScrapeRuns();
+    if (recovered.recovered > 0) {
+      console.log(`Marked ${recovered.recovered} interrupted scrape run(s) as failed.`);
+    }
+  } catch (error) {
+    console.error('Scrape run recovery failed:', error);
+  }
+
+  const server = app.listen(env.port, () => {
+    console.log(`API listening on http://localhost:${env.port}`);
+    setTimeout(() => {
+      void resumeAiQueueIfNeeded().catch((resumeError) => {
+        console.error('AI queue resume failed:', resumeError);
+      });
+    }, 1000).unref();
   });
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000).unref();
+
+  function shutdown() {
+    server.closeAllConnections?.();
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000).unref();
+  }
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
+void start().catch((error) => {
+  console.error('API failed to start:', error);
+  process.exit(1);
+});

@@ -16,6 +16,51 @@ export interface PostRecord {
   monitoringStatus: string;
   extractionStrategy?: string | null;
   extractionConfidence?: number | null;
+  aiAssessments?: PostAiAssessmentRecord[];
+}
+
+export interface AiMemberMatchRecord {
+  id: string;
+  assessmentId: string;
+  referralMemberId: string;
+  score: number;
+  scorePercent: string;
+  reason?: string | null;
+  suggestedIntro?: string | null;
+  status?: string;
+  copiedAt?: string | null;
+  introducedAt?: string | null;
+  dismissedAt?: string | null;
+  note?: string | null;
+  referralMember?: {
+    id: string;
+    name: string;
+    businessName?: string | null;
+    facebookName?: string | null;
+    facebookProfileUrl?: string | null;
+    category: string;
+  };
+}
+
+export interface PostAiAssessmentRecord {
+  id: string;
+  postId: string;
+  status: string;
+  model?: string | null;
+  promptVersion: string;
+  promptText?: string | null;
+  rawResponse?: unknown;
+  parsed?: unknown;
+  intent?: string | null;
+  isReferralOpportunity?: boolean | null;
+  confidence?: number | null;
+  summary?: string | null;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  memberMatches?: AiMemberMatchRecord[];
 }
 
 export interface PostDetailResponse {

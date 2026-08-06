@@ -1,7 +1,25 @@
 import { prisma } from '../db/prisma.js';
 import { normalizeFacebookGroupUrl } from './url-normalizer.js';
 export async function listGroups(){ return prisma.group.findMany({orderBy:{displayOrder:'asc'}}); }
-export async function createGroup(input:{facebookGroupUrl:string; friendlyName?:string; location?:string; notes?:string; enabled?:boolean}){ const canonicalGroupUrl=normalizeFacebookGroupUrl(input.facebookGroupUrl); const count=await prisma.group.count(); return prisma.group.create({data:{facebookGroupUrl:input.facebookGroupUrl, canonicalGroupUrl, friendlyName:input.friendlyName?.trim() || canonicalGroupUrl.split('/').pop() || 'Facebook group', location:input.location, notes:input.notes, enabled:input.enabled ?? true, displayOrder:count}}); }
+export async function createGroup(input:{facebookGroupUrl:string; friendlyName?:string; location?:string; notes?:string; enabled?:boolean}){
+  const canonicalGroupUrl = normalizeFacebookGroupUrl(input.facebookGroupUrl);
+  const existing = await prisma.group.findUnique({ where: { canonicalGroupUrl } });
+  if (existing) {
+    throw new Error(`Group already exists: ${existing.friendlyName}`);
+  }
+  const count = await prisma.group.count();
+  return prisma.group.create({
+    data: {
+      facebookGroupUrl: input.facebookGroupUrl,
+      canonicalGroupUrl,
+      friendlyName: input.friendlyName?.trim() || decodeURIComponent(canonicalGroupUrl.split('/').pop() || '') || 'Facebook group',
+      location: input.location,
+      notes: input.notes,
+      enabled: input.enabled ?? true,
+      displayOrder: count,
+    },
+  });
+}
 export async function updateGroup(id:string,input:any){ const data={...input}; if(input.facebookGroupUrl) data.canonicalGroupUrl=normalizeFacebookGroupUrl(input.facebookGroupUrl); return prisma.group.update({where:{id},data}); }
 export async function deleteGroup(id:string){
   const runs = await prisma.scrapeRun.findMany({ where: { groupId: id }, select: { id: true } });
