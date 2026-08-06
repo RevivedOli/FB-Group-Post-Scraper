@@ -1,6 +1,7 @@
 import { Box, List, ListItemButton, ListItemText, Typography } from '@mui/material';
 
-const nav = ['Dashboard', 'Posts', 'Groups', 'Referral Directory', 'AI Queue', 'Settings'];
+const nav = ['Dashboard', 'Posts', 'Groups', 'Referral Directory', 'Referral Queue', 'AI Usage', 'Settings'];
+const SIDEBAR_WIDTH = 260;
 
 export function Layout({ page, setPage, children }: { page: string; setPage: (p: string) => void; children: React.ReactNode }) {
   return (
@@ -11,11 +12,15 @@ export function Layout({ page, setPage, children }: { page: string; setPage: (p:
           bgcolor: '#101828',
           color: 'white',
           flexShrink: 0,
-          minHeight: '100vh',
+          width: SIDEBAR_WIDTH,
           p: 2,
-          position: 'sticky',
+          position: 'fixed',
           top: 0,
-          width: 260,
+          left: 0,
+          bottom: 0,
+          height: '100vh',
+          overflowY: 'auto',
+          zIndex: 1200,
         }}
       >
         <Box sx={{ mb: 3, px: 1, py: 1.5 }}>
@@ -41,7 +46,15 @@ export function Layout({ page, setPage, children }: { page: string; setPage: (p:
           ))}
         </List>
       </Box>
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 4 } }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          ml: `${SIDEBAR_WIDTH}px`,
+          p: { xs: 2, md: 4 },
+        }}
+      >
         <Box sx={{ animation: 'fadeIn 180ms ease', '@keyframes fadeIn': { from: { opacity: 0, transform: 'translateY(4px)' }, to: { opacity: 1, transform: 'translateY(0)' } } }}>
           {children}
         </Box>

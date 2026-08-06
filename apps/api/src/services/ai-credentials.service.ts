@@ -37,5 +37,5 @@ export async function deleteProviderApiKey(provider: string) {
 export async function getProviderCredentialStatus() {
   const providers = ['openai', 'xai', 'custom'] as const;
   const values = await Promise.all(providers.map(async (provider) => [provider, Boolean(await getProviderApiKey(provider))] as const));
-  return Object.fromEntries(values);
+  return Object.fromEntries(values) as Record<(typeof providers)[number], boolean>;
 }

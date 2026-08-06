@@ -147,10 +147,13 @@ model PostAiAssessment {
   provider String?
   model String?
   inputTokens Int?
+  cachedInputTokens Int?
   outputTokens Int?
   totalTokens Int?
+  requestCount Int?
   estimatedCostUsd Float?
   durationMs Int?
+  pricingSnapshot Json?
   promptVersion String
   promptText String?
   renderedPrompt String?
@@ -171,6 +174,8 @@ model PostAiAssessment {
   @@index([postId])
   @@index([status])
   @@index([promptVersion])
+  @@index([provider, model])
+  @@index([createdAt])
 }
 
 model AiMemberMatch {

@@ -9,6 +9,7 @@ import {
   CardContent,
   Chip,
   Dialog,
+  DialogActions,
   Accordion,
   AccordionDetails,
   AccordionSummary,
@@ -139,6 +140,15 @@ export function PostsPage() {
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
   const [rawPost, setRawPost] = useState<Record<string, unknown>>();
+  const [rerunOpen, setRerunOpen] = useState(false);
+  const [rerunGroupId, setRerunGroupId] = useState('all');
+  const [rerunReviewStatus, setRerunReviewStatus] = useState('all');
+  const [rerunAnalysisScope, setRerunAnalysisScope] = useState('not_analysed');
+  const [rerunDiscoveredDays, setRerunDiscoveredDays] = useState('7');
+  const [rerunObservedDays, setRerunObservedDays] = useState('all');
+  const [rerunLimit, setRerunLimit] = useState('300');
+  const [rerunApplyPrefilter, setRerunApplyPrefilter] = useState(true);
+  const [rerunSearch, setRerunSearch] = useState('');
 
   const rawJson = useMemo(() => rawPost ? JSON.stringify(rawPost, null, 2) : '', [rawPost]);
 
@@ -232,8 +242,60 @@ export function PostsPage() {
     setMessage(undefined);
     setError(undefined);
     try {
-      const result = await apiSend<Record<string, unknown>>(`/ai/posts/${post.id}/run`, 'POST', { force, process: true });
+      const result = await apiSend<Record<string, unknown>>(`/ai/posts/${post.id}/run`, 'POST', {
+        force,
+        process: true,
+        bypassPrefilter: force,
+      });
       setMessage(formatAiRunMessage(result));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  function openRerunDialog() {
+    setRerunGroupId(groupFilter);
+    setRerunReviewStatus(reviewFilter);
+    setRerunSearch(search);
+    setRerunOpen(true);
+  }
+
+  async function runFilteredAiRerun() {
+    setBusy('rerun-filtered');
+    setMessage(undefined);
+    setError(undefined);
+    try {
+      const result = await apiSend<{
+        inspected: number;
+        queued: number;
+        skipped: number;
+        failed: number;
+        applyPrefilter: boolean;
+        reasons?: Record<string, number>;
+      }>('/ai/rerun-filtered', 'POST', {
+        groupId: rerunGroupId,
+        reviewStatus: rerunReviewStatus,
+        analysisScope: rerunAnalysisScope,
+        discoveredWithinDays: rerunDiscoveredDays === 'all' ? undefined : Number(rerunDiscoveredDays),
+        lastObservedWithinDays: rerunObservedDays === 'all' ? undefined : Number(rerunObservedDays),
+        limit: Number(rerunLimit) || 300,
+        applyPrefilter: rerunApplyPrefilter,
+        search: rerunSearch.trim() || undefined,
+        force: true,
+        process: true,
+      });
+      const reasonSummary = result.reasons
+        ? Object.entries(result.reasons).map(([reason, count]) => `${reason.replaceAll('_', ' ')}: ${count}`).join(', ')
+        : '';
+      setMessage(
+        `AI rerun: inspected ${result.inspected}, queued ${result.queued}, skipped ${result.skipped}, failed ${result.failed}. `
+        + `Pre-filter ${result.applyPrefilter ? 'applied' : 'bypassed'}.`
+        + (reasonSummary ? ` (${reasonSummary})` : ''),
+      );
+      setRerunOpen(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -250,6 +312,9 @@ export function PostsPage() {
         <Typography variant="h4">Collected Posts</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Button onClick={() => void load()}>Refresh</Button>
+          <Button variant="contained" disabled={Boolean(busy)} onClick={openRerunDialog}>
+            Rerun AI
+          </Button>
           <Button color="error" disabled={busy === 'delete-ignored' || !counts?.ignored} onClick={() => void deleteIgnored()}>
             {busy === 'delete-ignored' ? 'Deleting...' : 'Delete Ignored'}
           </Button>
@@ -307,7 +372,7 @@ export function PostsPage() {
                   <Chip size="small" label={post.group?.friendlyName ?? 'Group'} />
                   {post.authorName && <Chip size="small" label={post.authorName} />}
                   <Chip size="small" label={post.reviewStatus} color={post.reviewStatus === 'useful' ? 'success' : post.reviewStatus === 'ignored' ? 'default' : post.reviewStatus === 'requires_review' ? 'warning' : 'primary'} />
-                  <Chip size="small" label={post.analysisStatus} />
+                  {!post.aiAssessments?.[0] && <Chip size="small" label={post.analysisStatus} />}
                   {post.aiAssessments?.[0] && (
                     <Chip
                       size="small"
@@ -421,6 +486,67 @@ export function PostsPage() {
             </Stack>
           )}
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={rerunOpen} onClose={() => setRerunOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Rerun AI on posts</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography color="text.secondary">
+              Queue a filtered set of posts for AI analysis. Skipped posts still appear in the Referral Queue when the pre-filter rejects them.
+            </Typography>
+            <TextField select size="small" label="Group" value={rerunGroupId} onChange={(event) => setRerunGroupId(event.target.value)}>
+              <MenuItem value="all">All groups</MenuItem>
+              {groups.map((group) => <MenuItem key={group.id} value={group.id}>{group.friendlyName}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Review status" value={rerunReviewStatus} onChange={(event) => setRerunReviewStatus(event.target.value)}>
+              <MenuItem value="all">All review statuses</MenuItem>
+              {reviewStatuses.map((status) => <MenuItem key={status} value={status}>{status.replace('_', ' ')}</MenuItem>)}
+            </TextField>
+            <TextField select size="small" label="Analysis scope" value={rerunAnalysisScope} onChange={(event) => setRerunAnalysisScope(event.target.value)}>
+              <MenuItem value="not_analysed">Not analysed yet</MenuItem>
+              <MenuItem value="all">All posts in filter</MenuItem>
+              <MenuItem value="previously_analysed">Previously analysed</MenuItem>
+              <MenuItem value="skipped_prefilter">Previously skipped by pre-filter</MenuItem>
+              <MenuItem value="failed">Previously failed</MenuItem>
+            </TextField>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField select size="small" label="Discovered within" value={rerunDiscoveredDays} onChange={(event) => setRerunDiscoveredDays(event.target.value)} fullWidth>
+                <MenuItem value="1">Last 1 day</MenuItem>
+                <MenuItem value="3">Last 3 days</MenuItem>
+                <MenuItem value="7">Last 7 days</MenuItem>
+                <MenuItem value="14">Last 14 days</MenuItem>
+                <MenuItem value="30">Last 30 days</MenuItem>
+                <MenuItem value="all">Any time</MenuItem>
+              </TextField>
+              <TextField select size="small" label="Last scraped within" value={rerunObservedDays} onChange={(event) => setRerunObservedDays(event.target.value)} fullWidth>
+                <MenuItem value="1">Last 1 day</MenuItem>
+                <MenuItem value="3">Last 3 days</MenuItem>
+                <MenuItem value="7">Last 7 days</MenuItem>
+                <MenuItem value="14">Last 14 days</MenuItem>
+                <MenuItem value="30">Last 30 days</MenuItem>
+                <MenuItem value="all">Any time</MenuItem>
+              </TextField>
+            </Stack>
+            <TextField size="small" label="Max posts" type="number" value={rerunLimit} onChange={(event) => setRerunLimit(event.target.value)} helperText="Safety cap for one rerun batch" />
+            <TextField size="small" label="Search text (optional)" value={rerunSearch} onChange={(event) => setRerunSearch(event.target.value)} />
+            <FormControlLabel
+              control={<Switch checked={rerunApplyPrefilter} onChange={(event) => setRerunApplyPrefilter(event.target.checked)} />}
+              label="Use pre-filter trigger phrases"
+            />
+            <Typography variant="body2" color="text.secondary">
+              {rerunApplyPrefilter
+                ? 'Posts must match a Settings pre-filter phrase or they will be recorded as skipped (no LLM call).'
+                : 'Pre-filter is bypassed. Every selected eligible post will be sent to the active AI provider.'}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRerunOpen(false)} disabled={busy === 'rerun-filtered'}>Cancel</Button>
+          <Button variant="contained" onClick={() => void runFilteredAiRerun()} disabled={busy === 'rerun-filtered'}>
+            {busy === 'rerun-filtered' ? 'Queueing...' : 'Queue AI rerun'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Stack>
   );

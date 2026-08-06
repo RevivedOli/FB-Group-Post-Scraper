@@ -74,10 +74,53 @@ export async function getManagedPage() {
   return ensureBrowser();
 }
 
-export async function navigateManagedPage(url: string) {
+function isNavigationTimeout(error: unknown) {
+  if (error instanceof Error && error.name === 'TimeoutError') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /Timeout \d+ms exceeded/i.test(message) || /Navigation timeout/i.test(message);
+}
+
+async function recoverStuckPage(browserPage: Page) {
+  // Facebook sometimes hangs mid-navigation; stop the load, refresh, then retry.
+  await browserPage.evaluate(() => window.stop()).catch(() => undefined);
+  try {
+    await browserPage.reload({ waitUntil: 'domcontentloaded' });
+  } catch {
+    await browserPage.goto('about:blank', { waitUntil: 'domcontentloaded' }).catch(() => undefined);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+}
+
+/**
+ * Navigate with timeout recovery: on page.goto timeout, refresh (or blank) and retry.
+ * Matches the manual fix of refreshing a stuck Facebook tab.
+ */
+export async function navigateManagedPage(url: string, options: {
+  maxAttempts?: number;
+  onRetry?: (info: { url: string; attempt: number; maxAttempts: number; error: string }) => void | Promise<void>;
+} = {}) {
   const browserPage = await ensureBrowser();
-  await browserPage.goto(url, { waitUntil: 'domcontentloaded' });
-  return browserPage;
+  const settings = await getSettings();
+  const maxAttempts = Math.max(1, Math.min(5, options.maxAttempts ?? 3));
+  const timeout = settings.browser.pageLoadTimeoutMs;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await browserPage.goto(url, { waitUntil: 'domcontentloaded', timeout });
+      return browserPage;
+    } catch (error) {
+      lastError = error;
+      if (!isNavigationTimeout(error) || attempt >= maxAttempts) throw error;
+
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[browser] Navigation timeout (${attempt}/${maxAttempts}) for ${url}; refreshing and retrying.`);
+      await options.onRetry?.({ url, attempt, maxAttempts, error: message });
+      await recoverStuckPage(browserPage);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export async function openFacebookLogin() {

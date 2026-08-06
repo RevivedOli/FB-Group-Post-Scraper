@@ -1,25 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Collapse, Dialog, DialogContent, DialogTitle, Divider, Link, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import type { AiPricingSnapshot, AiStatus } from '@local-group-monitor/shared';
 import { apiGet, apiSend } from '../api/client';
-
-interface AiStatus {
-  enabled: boolean;
-  autoAnalyse: boolean;
-  provider?: string;
-  providerLabel?: string;
-  model: string;
-  ollamaBaseUrl: string;
-  ollamaReachable: boolean;
-  processorRunning: boolean;
-  processorStartedAt?: string | null;
-  currentAssessmentId?: string | null;
-  currentPostUrl?: string | null;
-  processedInCurrentRun?: number;
-  promptVersion: string;
-  counts: Record<string, number>;
-  oldestRunningStartedAt?: string | null;
-  staleRunningThresholdSeconds: number;
-}
 
 interface AiAssessment {
   id: string;
@@ -32,10 +14,13 @@ interface AiAssessment {
   model?: string | null;
   provider?: string | null;
   inputTokens?: number | null;
+  cachedInputTokens?: number | null;
   outputTokens?: number | null;
   totalTokens?: number | null;
+  requestCount?: number | null;
   estimatedCostUsd?: number | null;
   durationMs?: number | null;
+  pricingSnapshot?: AiPricingSnapshot | null;
   promptVersion?: string | null;
   promptText?: string | null;
   renderedPrompt?: string | null;
@@ -106,6 +91,8 @@ interface AiActivityResponse {
   processorStartedAt?: string | null;
   currentAssessmentId?: string | null;
   currentPostUrl?: string | null;
+  currentPostUrls?: string[];
+  activeJobCount?: number;
   processedInCurrentRun: number;
   items: AiActivityEntry[];
 }
@@ -135,6 +122,36 @@ function formatAiActionMessage(kind: 'queue' | 'process' | 'rerun', result: Reco
 
 function shortUrl(url: string) {
   return url.replace(/^https:\/\/www\.facebook\.com\//, 'facebook.com/');
+}
+
+function usageLine(item: AiAssessment) {
+  return [
+    item.provider,
+    item.model,
+    typeof item.inputTokens === 'number' ? `${item.inputTokens.toLocaleString()} in` : undefined,
+    typeof item.cachedInputTokens === 'number' ? `${item.cachedInputTokens.toLocaleString()} cached` : undefined,
+    typeof item.outputTokens === 'number' ? `${item.outputTokens.toLocaleString()} out` : undefined,
+    typeof item.totalTokens === 'number' ? `${item.totalTokens.toLocaleString()} total` : undefined,
+    typeof item.durationMs === 'number' ? `${(item.durationMs / 1000).toFixed(1)}s` : undefined,
+    typeof item.estimatedCostUsd === 'number' ? `est. $${item.estimatedCostUsd.toFixed(5)}` : undefined,
+  ].filter(Boolean).join(' · ');
+}
+
+function skipReasonLabel(reason?: string | null) {
+  switch (reason) {
+    case 'prefilter_no_match':
+      return 'No trigger phrase';
+    case 'ai_disabled':
+      return 'AI disabled';
+    case 'missing_real_permalink':
+      return 'Missing permalink';
+    case 'missing_post_context':
+      return 'Missing post text';
+    case 'low_extraction_confidence':
+      return 'Low extraction confidence';
+    default:
+      return reason ? reason.replace(/_/g, ' ') : 'Skipped';
+  }
 }
 
 export function AiQueuePage() {
@@ -204,7 +221,7 @@ export function AiQueuePage() {
     setError(undefined);
     try {
       const path = kind === 'queue' ? '/ai/queue' : kind === 'process' ? '/ai/process' : '/ai/rerun-all';
-      const result = await apiSend<Record<string, unknown>>(path, 'POST', kind === 'process' ? { limit: 1000 } : { limit: 1000 });
+      const result = await apiSend<Record<string, unknown>>(path, 'POST', { limit: 1000 });
       setMessage(formatAiActionMessage(kind, result));
       await load();
     } catch (err) {
@@ -229,14 +246,57 @@ export function AiQueuePage() {
     }
   }
 
+  async function requeueItem(item: AiAssessment, bypassPrefilter = false) {
+    setBusy(`requeue:${item.id}`);
+    setMessage(undefined);
+    setError(undefined);
+    try {
+      const result = await apiSend<{ queued: boolean; reason?: string }>(`/ai/assessments/${item.id}/requeue`, 'POST', {
+        process: true,
+        bypassPrefilter,
+      });
+      setMessage(result.queued
+        ? 'Re-queued item and started the processor.'
+        : `Item not queued: ${(result.reason ?? 'unknown').replaceAll('_', ' ')}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  async function requeueFailed() {
+    setBusy('requeue-failed');
+    setMessage(undefined);
+    setError(undefined);
+    try {
+      const result = await apiSend<{ inspected: number; queued: number; skipped: number; failed: number }>('/ai/requeue-failed', 'POST', {
+        status: 'failed',
+        limit: 500,
+        process: true,
+        bypassPrefilter: true,
+      });
+      setMessage(`Retry failed: inspected ${result.inspected}, re-queued ${result.queued}, still skipped ${result.skipped}, errors ${result.failed}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
   return (
     <Stack spacing={3}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
-        <Typography variant="h4">AI Queue</Typography>
+        <Typography variant="h4">Referral Queue</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Button onClick={() => void load()}>Refresh</Button>
           <Button variant="outlined" disabled={Boolean(busy)} onClick={() => void action('queue')}>{busy === 'queue' ? 'Queueing...' : 'Queue Eligible'}</Button>
           <Button variant="contained" disabled={Boolean(busy)} onClick={() => void action('process')}>{busy === 'process' ? 'Processing...' : 'Process Queue'}</Button>
+          <Button color="warning" disabled={Boolean(busy) || !(status?.counts.failed)} onClick={() => void requeueFailed()}>
+            {busy === 'requeue-failed' ? 'Retrying...' : `Retry Failed${status?.counts.failed ? ` (${status.counts.failed})` : ''}`}
+          </Button>
           <Button color="warning" disabled={Boolean(busy)} onClick={() => void resetStale()}>{busy === 'reset-stale' ? 'Resetting...' : 'Reset Stale'}</Button>
           <Button color="warning" disabled={Boolean(busy)} onClick={() => void action('rerun')}>{busy === 'rerun' ? 'Queueing...' : 'Rerun Current Prompt'}</Button>
         </Stack>
@@ -252,12 +312,22 @@ export function AiQueuePage() {
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 <Chip label={status.enabled ? 'AI enabled' : 'AI disabled'} color={status.enabled ? 'success' : 'default'} />
                 <Chip label={status.autoAnalyse ? 'Auto analysis on' : 'Auto analysis off'} />
-                <Chip label={status.ollamaReachable ? 'Ollama reachable' : 'Ollama offline'} color={status.ollamaReachable ? 'success' : 'warning'} />
+                <Chip label={`${status.providerLabel}: ${status.providerHealth?.reachable ? 'ready' : 'not ready'}`} color={status.providerHealth?.reachable ? 'success' : 'warning'} />
+                {status.provider === 'ollama' ? (
+                  <Chip label={status.ollamaReachable ? 'Ollama reachable' : 'Ollama offline'} color={status.ollamaReachable ? 'success' : 'warning'} />
+                ) : null}
                 <Chip label={status.processorRunning ? 'Processor running' : 'Processor idle'} />
-                <Chip label={`Model ${status.model}`} />
-                {status.oldestRunningStartedAt && <Chip label={`Oldest running ${ageLabel(status.oldestRunningStartedAt)}`} color="warning" />}
+                <Chip label={`${status.providerLabel} · ${status.model}`} />
+                <Chip label={`Concurrency ${status.effectiveConcurrency ?? 1}${status.provider === 'ollama' ? ' (local)' : ''}`} />
+                {(status.activeJobCount ?? 0) > 0 && <Chip label={`${status.activeJobCount} active`} color="warning" />}
+                {status.oldestRunningStartedAt && <Chip label={`Oldest running ${ageLabel(String(status.oldestRunningStartedAt))}`} color="warning" />}
               </Stack>
-              <Typography color="text.secondary">{status.ollamaBaseUrl} · prompt {status.promptVersion} · stale after {ageLabel(new Date(Date.now() - status.staleRunningThresholdSeconds * 1000).toISOString())}</Typography>
+              <Typography color="text.secondary">
+                {status.providerHealth?.detail || status.baseUrl || status.ollamaBaseUrl}
+                {' · '}prompt {status.promptVersion}
+                {' · '}stale after {ageLabel(new Date(Date.now() - status.staleRunningThresholdSeconds * 1000).toISOString())}
+                {status.provider !== 'ollama' ? ` · remote concurrency setting ${status.remoteConcurrency ?? 5}` : ''}
+              </Typography>
               {status.counts.running > 0 && !status.processorRunning && (
                 <Alert severity="warning">There are running rows but the worker is idle. Use Reset Stale, then Process Queue.</Alert>
               )}
@@ -284,15 +354,19 @@ export function AiQueuePage() {
                   {activityExpanded ? 'Hide activity' : 'Show activity'}
                 </Button>
               </Stack>
-              {activity.currentPostUrl ? (
-                <Typography color="text.secondary">
-                  Current post:{' '}
-                  <Link href={activity.currentPostUrl} target="_blank" rel="noreferrer">
-                    {shortUrl(activity.currentPostUrl)}
-                  </Link>
-                </Typography>
+              {(activity.currentPostUrls?.length || activity.currentPostUrl) ? (
+                <Stack spacing={0.25}>
+                  <Typography color="text.secondary">
+                    Active request{(activity.currentPostUrls?.length ?? 0) > 1 ? 's' : ''}:
+                  </Typography>
+                  {(activity.currentPostUrls?.length ? activity.currentPostUrls : activity.currentPostUrl ? [activity.currentPostUrl] : []).map((url) => (
+                    <Typography key={url} color="text.secondary">
+                      <Link href={url} target="_blank" rel="noreferrer">{shortUrl(url)}</Link>
+                    </Typography>
+                  ))}
+                </Stack>
               ) : (
-                <Typography color="text.secondary">No active Ollama request.</Typography>
+                <Typography color="text.secondary">No active AI request.</Typography>
               )}
               <Collapse in={activityExpanded} timeout="auto" unmountOnExit>
                 <Stack spacing={0.75}>
@@ -386,14 +460,28 @@ export function AiQueuePage() {
             <CardContent>
               <Stack spacing={1.25}>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip size="small" label={item.status} color={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'error' : 'default'} />
+                  <Chip size="small" label={item.status} color={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'error' : item.status === 'skipped' ? 'warning' : 'default'} />
+                  {item.status === 'skipped' && item.errorMessage ? <Chip size="small" label={skipReasonLabel(item.errorMessage)} color="warning" variant="outlined" /> : null}
                   {item.intent && <Chip size="small" label={item.intent} />}
-                  {item.isReferralOpportunity !== undefined && <Chip size="small" label={item.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
+                  {item.isReferralOpportunity !== undefined && item.status !== 'skipped' && <Chip size="small" label={item.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
                   {typeof item.confidence === 'number' && <Chip size="small" label={`AI confidence ${Math.round(item.confidence * 100)}%`} />}
                   {item.post?.group?.friendlyName && <Chip size="small" label={item.post.group.friendlyName} />}
                   {item.status === 'running' && <Chip size="small" label={`Running ${ageLabel(item.startedAt)}`} color="warning" />}
                 </Stack>
-                <Typography>{item.summary || item.errorMessage || item.post?.latestCapturedText || 'No summary.'}</Typography>
+                {(item.summary || item.errorMessage) && (
+                  <Alert
+                    severity={item.status === 'failed' ? 'error' : item.status === 'skipped' ? 'warning' : item.isReferralOpportunity ? 'success' : 'info'}
+                    sx={{ '& .MuiAlert-message': { width: '100%' } }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                      {item.status === 'skipped' ? 'Skip reason' : item.status === 'failed' ? 'Error' : 'AI summary'}
+                    </Typography>
+                    <Typography>{item.summary || item.errorMessage}</Typography>
+                  </Alert>
+                )}
+                <Typography sx={{ whiteSpace: 'pre-wrap' }}>
+                  {item.post?.latestCapturedText || 'No post text captured.'}
+                </Typography>
                 {item.memberMatches && item.memberMatches.length > 0 && (
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                     {item.memberMatches.map((match) => (
@@ -403,10 +491,23 @@ export function AiQueuePage() {
                 )}
                 <Typography color="text.secondary">{item.post?.canonicalPostUrl}</Typography>
                 <Typography color="text.secondary">Created {new Date(item.createdAt).toLocaleString()}{item.completedAt ? ` · Completed ${new Date(item.completedAt).toLocaleString()}` : ''}</Typography>
-                {(item.provider || typeof item.totalTokens === 'number' || typeof item.durationMs === 'number') && <Typography variant="body2" color="text.secondary">
-                  {[item.provider, item.model, typeof item.totalTokens === 'number' ? `${item.totalTokens.toLocaleString()} tokens` : undefined, typeof item.durationMs === 'number' ? `${(item.durationMs / 1000).toFixed(1)}s` : undefined, typeof item.estimatedCostUsd === 'number' ? `$${item.estimatedCostUsd.toFixed(5)}` : undefined].filter(Boolean).join(' · ')}
-                </Typography>}
-                <Button sx={{ alignSelf: 'flex-start' }} onClick={(event) => { event.stopPropagation(); setSelected(item); }}>View decision details</Button>
+                {usageLine(item) && <Typography variant="body2" color="text.secondary">{usageLine(item)}</Typography>}
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Button size="small" onClick={(event) => { event.stopPropagation(); setSelected(item); }}>View decision details</Button>
+                  {(item.status === 'failed' || item.status === 'skipped') && (
+                    <Button
+                      size="small"
+                      color="warning"
+                      disabled={Boolean(busy)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void requeueItem(item, item.status === 'failed');
+                      }}
+                    >
+                      {busy === `requeue:${item.id}` ? 'Re-queueing...' : 'Re-add to queue'}
+                    </Button>
+                  )}
+                </Stack>
               </Stack>
             </CardContent>
           </Card>
@@ -424,14 +525,9 @@ function jsonBlock(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
 
-function aiUserInputText(inputPayload: unknown) {
-  if (!inputPayload || typeof inputPayload !== 'object') return 'No structured input stored.';
-  return jsonBlock(inputPayload);
-}
-
 function codePanel(value: unknown) {
   return (
-    <Box component="pre" sx={{ bgcolor: 'grey.100', borderRadius: 1, overflow: 'auto', p: 2, fontSize: 13, whiteSpace: 'pre-wrap', maxHeight: 520 }}>
+    <Box component="pre" sx={{ bgcolor: 'action.hover', borderRadius: 1, overflow: 'auto', p: 2, fontSize: 13, whiteSpace: 'pre-wrap', maxHeight: 520 }}>
       {jsonBlock(value)}
     </Box>
   );
@@ -458,15 +554,25 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
                 {assessment.intent && <Chip size="small" label={assessment.intent} />}
                 {assessment.isReferralOpportunity !== undefined && <Chip size="small" label={assessment.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
                 {typeof assessment.confidence === 'number' && <Chip size="small" label={`AI confidence ${Math.round(assessment.confidence * 100)}%`} />}
-                {assessment.model && <Chip size="small" label={assessment.model} />}
                 {assessment.provider && <Chip size="small" label={assessment.provider} />}
+                {assessment.model && <Chip size="small" label={assessment.model} />}
                 {typeof assessment.totalTokens === 'number' && <Chip size="small" label={`${assessment.totalTokens.toLocaleString()} tokens`} />}
-                {typeof assessment.estimatedCostUsd === 'number' && <Chip size="small" label={`$${assessment.estimatedCostUsd.toFixed(5)}`} />}
+                {typeof assessment.estimatedCostUsd === 'number' && <Chip size="small" label={`est. $${assessment.estimatedCostUsd.toFixed(5)}`} />}
               </Stack>
 
               <Box>
                 <Typography variant="overline" color="text.secondary">AI summary</Typography>
                 <Typography>{assessment.summary || assessment.errorMessage || 'No AI summary stored.'}</Typography>
+              </Box>
+
+              <Box>
+                <Typography variant="overline" color="text.secondary">Usage</Typography>
+                <Typography>{usageLine(assessment) || 'No usage stored.'}</Typography>
+                {assessment.pricingSnapshot ? (
+                  <Typography color="text.secondary">
+                    Pricing snapshot {assessment.pricingSnapshot.catalogVersion}: ${assessment.pricingSnapshot.inputCostPerMillion}/${assessment.pricingSnapshot.cachedInputCostPerMillion}/${assessment.pricingSnapshot.outputCostPerMillion} per 1M in/cached/out
+                  </Typography>
+                ) : null}
               </Box>
 
               <Box>
@@ -529,7 +635,7 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
                   </Box>
                   <Box>
                     <Typography variant="h6">Rendered Request</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 1 }}>Exact system instructions used for this assessment. New assessments contain distinct classification and matching stages.</Typography>
+                    <Typography color="text.secondary" sx={{ mb: 1 }}>Exact system instructions used for this single-call assessment.</Typography>
                     {codePanel(assessment.renderedPrompt || assessment.promptText || 'No rendered prompt stored.')}
                   </Box>
                 </Stack>
@@ -538,13 +644,8 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
               {rawTab === 'input' && (
                 <Stack spacing={2}>
                   <Box>
-                    <Typography variant="h6">User Input</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 1 }}>Stored stage inputs. The matching stage only receives locally shortlisted referral candidates.</Typography>
-                    {codePanel(aiUserInputText(assessment.inputPayload))}
-                  </Box>
-                  <Box>
                     <Typography variant="h6">Structured Input Payload</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 1 }}>Machine-readable payload stored for debugging.</Typography>
+                    <Typography color="text.secondary" sx={{ mb: 1 }}>Post and all active referral-member profiles sent to the model. Member matches must use exact IDs from this list.</Typography>
                     {codePanel(assessment.inputPayload)}
                   </Box>
                 </Stack>

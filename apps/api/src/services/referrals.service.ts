@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { pickPreferredAiMemberMatch } from './ai-assessment.service.js';
 
 interface ReferralMemberInput {
   name: string;
@@ -72,17 +73,43 @@ export async function getReferralDirectory() {
     prisma.referralMatch.count({ where: { status: 'suggested' } }),
     prisma.referralMatch.count({ where: { status: 'accepted' } }),
     prisma.referralMatch.count({ where: { status: 'dismissed' } }),
-    prisma.aiMemberMatch.groupBy({
-      by: ['referralMemberId', 'status'],
-      _count: { _all: true },
+    prisma.aiMemberMatch.findMany({
+      select: {
+        id: true,
+        referralMemberId: true,
+        status: true,
+        createdAt: true,
+        assessment: { select: { postId: true, createdAt: true } },
+      },
     }),
   ]);
 
+  // Count unique posts per member so AI reruns do not inflate badges.
   const aiCountsByMember = new Map<string, Record<string, number>>();
-  for (const group of aiMatchGroups) {
-    const counts = aiCountsByMember.get(group.referralMemberId) ?? {};
-    counts[group.status] = group._count._all;
-    aiCountsByMember.set(group.referralMemberId, counts);
+  const byMemberPost = new Map<string, Array<{
+    id: string;
+    referralMemberId: string;
+    status: string;
+    createdAt: Date;
+    assessmentCreatedAt: Date;
+  }>>();
+  for (const row of aiMatchGroups) {
+    const key = `${row.referralMemberId}:${row.assessment.postId}`;
+    const list = byMemberPost.get(key) ?? [];
+    list.push({
+      id: row.id,
+      referralMemberId: row.referralMemberId,
+      status: row.status,
+      createdAt: row.createdAt,
+      assessmentCreatedAt: row.assessment.createdAt,
+    });
+    byMemberPost.set(key, list);
+  }
+  for (const group of byMemberPost.values()) {
+    const preferred = pickPreferredAiMemberMatch(group);
+    const counts = aiCountsByMember.get(preferred.referralMemberId) ?? {};
+    counts[preferred.status] = (counts[preferred.status] ?? 0) + 1;
+    aiCountsByMember.set(preferred.referralMemberId, counts);
   }
 
   return {
@@ -366,18 +393,21 @@ export async function listMemberAiMatches(
   if (typeof options.minScore === 'number' && Number.isFinite(options.minScore) && options.minScore > 0) {
     where.score = { gte: Math.min(1, Math.max(0, options.minScore)) };
   }
-  if (options.status && options.status !== 'all') where.status = options.status;
+  if (options.status === 'active' || !options.status) {
+    // Default Linked Matches view: hide dismissed / not_relevant.
+    where.status = { notIn: ['dismissed', 'not_relevant'] };
+  } else if (options.status !== 'all') {
+    where.status = options.status;
+  }
   if (options.search?.trim()) {
     const term = options.search.trim();
     where.assessment = { post: { OR: [{ latestCapturedText: { contains: term } }, { canonicalPostUrl: { contains: term } }, { authorName: { contains: term } }] } };
   }
-  const [member, items, total] = await Promise.all([
+  const [member, rawItems] = await Promise.all([
     prisma.referralMember.findUnique({ where: { id: memberId } }),
     prisma.aiMemberMatch.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
       select: {
         id: true,
         assessmentId: true,
@@ -398,6 +428,7 @@ export async function listMemberAiMatches(
             intent: true,
             summary: true,
             confidence: true,
+            createdAt: true,
             post: {
               select: {
                 id: true,
@@ -412,9 +443,23 @@ export async function listMemberAiMatches(
         },
       },
     }),
-    prisma.aiMemberMatch.count({ where }),
   ]);
   if (!member) throw new Error('Referral member not found.');
+
+  // One linked card per post (reruns can leave multiple assessment match rows).
+  const byPost = new Map<string, typeof rawItems>();
+  for (const item of rawItems) {
+    const postId = item.assessment.post.id;
+    const list = byPost.get(postId) ?? [];
+    list.push(item);
+    byPost.set(postId, list);
+  }
+  const deduped = [...byPost.values()].map((group) => pickPreferredAiMemberMatch(
+    group.map((item) => ({ ...item, assessmentCreatedAt: item.assessment.createdAt })),
+  ));
+  deduped.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const total = deduped.length;
+  const items = deduped.slice((page - 1) * pageSize, page * pageSize);
   return { member, items, total };
 }
 

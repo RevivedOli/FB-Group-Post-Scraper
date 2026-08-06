@@ -130,7 +130,7 @@ export function ReferralDirectoryPage() {
   const [memberMatches, setMemberMatches] = useState<MemberAiMatch[]>([]);
   const [memberMatchTotal, setMemberMatchTotal] = useState(0);
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberStatus, setMemberStatus] = useState('all');
+  const [memberStatus, setMemberStatus] = useState('active');
   const [memberMinScore, setMemberMinScore] = useState('0.2');
   const [directorySearch, setDirectorySearch] = useState('');
   const [directoryWorkflowFilter, setDirectoryWorkflowFilter] = useState('all');
@@ -397,7 +397,7 @@ export function ReferralDirectoryPage() {
             <Button variant="contained" disabled={busy === 'generate' || members.length === 0} onClick={() => void generateMatches()}>
               {busy === 'generate' ? 'Matching...' : 'Generate Keyword Matches'}
             </Button>
-            <HelpTip title="Runs the older keyword matcher against saved posts using each member's Keywords field. This is separate from AI Queue/Ollama matching and is useful as a fallback or comparison signal." />
+            <HelpTip title="Runs the older keyword matcher against saved posts using each member's Keywords field. This is separate from Referral Queue matching and is useful as a fallback or comparison signal." />
           </Stack>
         </Stack>
       </Stack>
@@ -624,7 +624,8 @@ export function ReferralDirectoryPage() {
               <Stack spacing={2}>
                 <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
                   <TextField size="small" label="Search posts" value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void loadMemberMatches(); }} />
-                  <TextField select size="small" label="Status" value={memberStatus} onChange={(event) => setMemberStatus(event.target.value)} sx={{ width: 160 }}>
+                  <TextField select size="small" label="Status" value={memberStatus} onChange={(event) => setMemberStatus(event.target.value)} sx={{ width: 200 }}>
+                    <MenuItem value="active">Active (hide dismissed)</MenuItem>
                     <MenuItem value="all">All</MenuItem>
                     <MenuItem value="new">New</MenuItem>
                     <MenuItem value="copied">Copied</MenuItem>
