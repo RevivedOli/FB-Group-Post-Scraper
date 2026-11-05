@@ -16,7 +16,14 @@ fs.mkdirSync(backupsDir, { recursive: true });
 if (fs.existsSync(databasePath)) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupPath = path.join(backupsDir, `app.sqlite.pre-migrate-${stamp}.bak`);
-  fs.copyFileSync(databasePath, backupPath);
+  // The SQLite backup API includes committed WAL content; copying only app.sqlite does not.
+  const backup = spawnSync('python3', ['-c',
+    'import sqlite3,sys; source=sqlite3.connect(sys.argv[1],timeout=15); target=sqlite3.connect(sys.argv[2]); source.backup(target); target.close(); source.close()',
+    databasePath, backupPath], { stdio:'inherit', timeout:30000 });
+  if (backup.status !== 0 || backup.error) {
+    console.error('Database backup failed; migration cancelled.');
+    process.exit(1);
+  }
   console.log(`Backed up database to ${backupPath}`);
 }
 

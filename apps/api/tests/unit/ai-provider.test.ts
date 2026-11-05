@@ -19,7 +19,7 @@ describe('AI settings normalization', () => {
     });
     expect(settings.ai.provider).toBe('ollama');
     expect(settings.ai.requestTimeoutSeconds).toBe(240);
-    expect(settings.ai.openaiModel).toBe('gpt-5.6-luna');
+    expect(settings.ai.openaiModel).toBe('gpt-6-luna');
     expect(settings.ai.remoteConcurrency).toBe(5);
   });
 

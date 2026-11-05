@@ -1,10 +1,49 @@
+import type { Prisma } from '@prisma/client';
+import {hasAiPostFilter,latestCompletedPostFilter} from './post-ai-filter.js';
 import crypto from 'node:crypto';
 import type { Page } from 'playwright-core';
-import { reviewStatuses } from '@local-group-monitor/shared';
+import { isRealFacebookPostPermalink, matchesAiPrefilter, parseAiPrefilterPhrases, reviewStatuses, withPostLinkFields } from '@local-group-monitor/shared';
 import { prisma } from '../db/prisma.js';
 import { queuePostAfterScrape } from './ai-assessment.service.js';
-import { parsePostCandidate } from './post-parser.js';
+import { getSettings } from './settings.service.js';
+import { extractFacebookPostId, normalizeFacebookPostUrl, parsePostCandidate } from './post-parser.js';
 import { moveRealCursorToPagePoint } from './real-cursor.service.js';
+
+function assessmentUiFields(assessment: {
+  inputPayload?: unknown;
+  summary?: string | null;
+  errorMessage?: string | null;
+  status: string;
+}, postText?: string | null, prefilterPhrases?: string) {
+  const payload = assessment.inputPayload as {
+    queuedWith?: {
+      prefilter?: {
+        matchedPhrase?: string | null;
+        bypassed?: boolean;
+        reason?: string | null;
+        enabled?: boolean;
+        phrases?: string[];
+      };
+    };
+  } | null | undefined;
+  const prefilter = payload?.queuedWith?.prefilter;
+  let matchedPhrase = prefilter?.matchedPhrase ?? null;
+  // Backfill for older assessments that predate matchedPhrase storage.
+  if (!matchedPhrase && assessment.status !== 'skipped' && postText) {
+    const phrases = prefilter?.phrases?.length
+      ? prefilter.phrases
+      : parseAiPrefilterPhrases(prefilterPhrases ?? '');
+    if (phrases.length > 0) {
+      const match = matchesAiPrefilter(postText, phrases);
+      if (match.matched) matchedPhrase = match.matchedPhrase ?? null;
+    }
+  }
+  return {
+    prefilterMatchedPhrase: matchedPhrase,
+    prefilterBypassed: Boolean(prefilter?.bypassed),
+    prefilterEnabled: prefilter?.enabled,
+  };
+}
 
 interface ExtractedPostCandidate {
   canonicalPostUrl: string;
@@ -1001,30 +1040,17 @@ interface ListPostsOptions {
   aiMemberId?: string;
 }
 
-function buildPostWhere(options: ListPostsOptions) {
-  const where: {
-    reviewStatus?: string;
-    groupId?: string;
-    extractionConfidence?: { gte: number };
-    aiAssessments?: { some: Record<string, unknown> };
-    OR?: Array<{ latestCapturedText?: { contains: string }; authorName?: { contains: string }; canonicalPostUrl?: { contains: string } }>;
-  } = {};
+async function buildPostWhere(options: ListPostsOptions) {
+  const where: Prisma.PostWhereInput = {};
 
   if (options.reviewStatus && options.reviewStatus !== 'all') where.reviewStatus = options.reviewStatus;
   if (options.groupId && options.groupId !== 'all') where.groupId = options.groupId;
   if (typeof options.minConfidence === 'number' && Number.isFinite(options.minConfidence) && options.minConfidence > 0) {
     where.extractionConfidence = { gte: Math.min(1, Math.max(0, options.minConfidence)) };
   }
-  const aiFilter: Record<string, unknown> = {};
-  if (options.aiReferralOnly) aiFilter.isReferralOpportunity = true;
-  if (options.aiIntent && options.aiIntent !== 'all') aiFilter.intent = options.aiIntent;
-  if (options.aiMemberId && options.aiMemberId !== 'all') {
-    aiFilter.memberMatches = { some: { referralMemberId: options.aiMemberId } };
-  } else if (options.aiReferralOnly) {
-    aiFilter.memberMatches = { some: {} };
-  }
-  if (Object.keys(aiFilter).length > 0) {
-    where.aiAssessments = { some: { status: 'completed', ...aiFilter } };
+  if(hasAiPostFilter(options)){
+    const matching=await prisma.$queryRaw<Array<{postId:string}>>(latestCompletedPostFilter(options));
+    where.id={in:matching.map(row=>row.postId)};
   }
   if (options.search?.trim()) {
     const term = options.search.trim();
@@ -1042,7 +1068,8 @@ export async function listPosts(options: ListPostsOptions = {}) {
   const page = Math.max(1, Number(options.page ?? 1));
   const pageSize = Math.max(1, Math.min(100, Number(options.pageSize ?? 25)));
   const skip = (page - 1) * pageSize;
-  const where = buildPostWhere(options);
+  const where = await buildPostWhere(options);
+  const settings = await getSettings();
   const [items, total, all, newCount, requiresReview, useful, ignored] = await Promise.all([
     prisma.post.findMany({
       where,
@@ -1050,9 +1077,10 @@ export async function listPosts(options: ListPostsOptions = {}) {
       skip,
       take: pageSize,
       include: {
-        group: { select: { friendlyName: true } },
+        group: { select: { friendlyName: true, canonicalGroupUrl: true } },
         aiAssessments: {
-          orderBy: { createdAt: 'desc' },
+          ...(hasAiPostFilter(options)?{where:{status:'completed'}}:{}),
+          orderBy: [{ createdAt: 'desc' },{id:'desc'}],
           take: 1,
           select: {
             id: true,
@@ -1062,6 +1090,7 @@ export async function listPosts(options: ListPostsOptions = {}) {
             confidence: true,
             summary: true,
             errorMessage: true,
+            inputPayload: true,
             createdAt: true,
             completedAt: true,
             memberMatches: {
@@ -1097,7 +1126,16 @@ export async function listPosts(options: ListPostsOptions = {}) {
     prisma.post.count({ where: { reviewStatus: 'ignored' } }),
   ]);
   return {
-    items,
+    items: items.map((item) => withPostLinkFields({
+      ...item,
+      aiAssessments: item.aiAssessments.map((assessment) => {
+        const { inputPayload: _inputPayload, ...rest } = assessment;
+        return {
+          ...rest,
+          ...assessmentUiFields(assessment, item.latestCapturedText, settings.ai.prefilterPhrases),
+        };
+      }),
+    })),
     total,
     counts: {
       all,
@@ -1125,7 +1163,64 @@ export async function getPostDetail(id: string) {
     },
   });
   if (!post) throw new Error('Post not found.');
-  return { post };
+  return { post: withPostLinkFields(post) };
+}
+
+export class PostUrlCollisionError extends Error {
+  conflictingPostId: string;
+  conflictingFriendlyLabel: string;
+
+  constructor(conflictingPostId: string, conflictingFriendlyLabel: string) {
+    super(`That direct URL already belongs to another saved post (${conflictingFriendlyLabel}).`);
+    this.name = 'PostUrlCollisionError';
+    this.conflictingPostId = conflictingPostId;
+    this.conflictingFriendlyLabel = conflictingFriendlyLabel;
+  }
+}
+
+export async function updatePostCanonicalUrl(id: string, rawUrl: string) {
+  const existing = await prisma.post.findUnique({
+    where: { id },
+    include: { group: { select: { friendlyName: true, canonicalGroupUrl: true } } },
+  });
+  if (!existing) throw new Error('Post not found.');
+
+  const normalized = normalizeFacebookPostUrl(rawUrl.trim());
+  if (!normalized || !isRealFacebookPostPermalink(normalized)) {
+    throw new Error('Enter a valid Facebook group post URL (…/groups/…/posts/…).');
+  }
+
+  const collision = await prisma.post.findFirst({
+    where: {
+      canonicalPostUrl: normalized,
+      id: { not: id },
+    },
+    include: { group: { select: { friendlyName: true } } },
+  });
+  if (collision) {
+    const label = collision.authorName
+      || collision.group?.friendlyName
+      || collision.id.slice(0, 8);
+    throw new PostUrlCollisionError(collision.id, label);
+  }
+
+  const warnings = (Array.isArray(existing.fieldWarnings)
+    ? existing.fieldWarnings.filter((warning) => warning !== 'missing_permalink')
+    : []) as string[];
+
+  const updated = await prisma.post.update({
+    where: { id },
+    data: {
+      canonicalPostUrl: normalized,
+      facebookPostId: extractFacebookPostId(normalized) ?? existing.facebookPostId,
+      extractionStrategy: 'manual_correction',
+      extractionConfidence: Math.max(existing.extractionConfidence ?? 0, 0.9),
+      fieldWarnings: warnings,
+    },
+    include: { group: { select: { friendlyName: true, canonicalGroupUrl: true } } },
+  });
+
+  return withPostLinkFields(updated);
 }
 
 export async function updatePostReviewStatus(id: string, reviewStatus: string) {

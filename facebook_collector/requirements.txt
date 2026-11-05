@@ -1,0 +1,2 @@
+facebook-gql-scraper @ git+https://github.com/XD-MHLOO/facebook-gql-scraper.git@3933a99a4eaac2e04754165b0ad7582b1ba452e9
+playwright==1.64.1

@@ -9,3 +9,4 @@ export * from './types/posts.js';
 export * from './types/referrals.js';
 export * from './types/runs.js';
 export * from './types/settings.js';
+export * from './utils/post-urls.js';

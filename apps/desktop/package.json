@@ -1,0 +1,82 @@
+{
+  "name": "local-group-monitor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local Group Monitor desktop app",
+  "author": "Local Group Monitor",
+  "main": "main.cjs",
+  "build": {
+    "appId": "com.local-group-monitor.app",
+    "productName": "Local Group Monitor",
+    "copyright": "Copyright © Local Group Monitor",
+    "electronVersion": "37.10.3",
+    "directories": {
+      "output": "../../release",
+      "buildResources": "build"
+    },
+    "icon": "build/icon.png",
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../api/dist",
+        "to": "server/apps/api/dist"
+      },
+      {
+        "from": "../web/dist",
+        "to": "server/apps/web/dist"
+      },
+      {
+        "from": "../../packages/shared/dist",
+        "to": "server/packages/shared/dist"
+      },
+      {
+        "from": "../../packages/shared/package.json",
+        "to": "server/packages/shared/package.json"
+      },
+      {
+        "from": "../api/package.json",
+        "to": "server/apps/api/package.json"
+      },
+      {
+        "from": "../../prisma",
+        "to": "server/prisma"
+      },
+      {
+        "from": "../../package.json",
+        "to": "server/package.json"
+      },
+      {
+        "from": "../../node_modules",
+        "to": "server/node_modules",
+        "filter": [
+          "**/*",
+          "!electron/**/*",
+          "!electron-builder/**/*",
+          "!@electron/**/*",
+          "!app-builder-bin/**/*",
+          "!app-builder-lib/**/*",
+          "!builder-util/**/*",
+          "!builder-util-runtime/**/*",
+          "!typescript/**/*",
+          "!vitest/**/*",
+          "!vite/**/*",
+          "!@vitejs/**/*",
+          "!tsx/**/*",
+          "!@types/**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dir"],
+      "icon": "build/icon.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "npmRebuild": false
+  }
+}

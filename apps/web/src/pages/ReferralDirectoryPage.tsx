@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { apiGet, apiGetText, apiSend } from '../api/client';
+import { PostLinkActions } from '../components/PostLinkActions';
 
 interface ReferralMember {
   id: string;
@@ -59,10 +60,16 @@ interface MemberAiMatch {
     summary?: string | null;
     confidence?: number | null;
     post: {
+      id: string;
       canonicalPostUrl: string;
       latestCapturedText?: string | null;
       authorName?: string | null;
       firstDiscoveredAt: string;
+      originalPostedAt?: string | null;
+      hasRealPermalink?: boolean;
+      searchPostUrl?: string | null;
+      openPostUrl?: string;
+      searchExcerpt?: string | null;
       group?: { friendlyName: string };
     };
   };
@@ -287,7 +294,7 @@ export function ReferralDirectoryPage() {
     setError(undefined);
     try {
       const result = await apiSend<{ created: number; updated: number }>('/referrals/matches/generate', 'POST');
-      setMessage(`Generated ${result.created} keyword match(es), updated ${result.updated}.`);
+      setMessage(`Created ${result.created} keyword suggestions from saved posts; refreshed ${result.updated}. These are keyword matches, not confirmed AI referrals.`);
       await loadDirectory();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -651,12 +658,43 @@ export function ReferralDirectoryPage() {
                           <Chip size="small" label={match.status} />
                           {match.assessment.intent && <Chip size="small" label={match.assessment.intent} />}
                           {match.assessment.post.group?.friendlyName && <Chip size="small" label={match.assessment.post.group.friendlyName} />}
+                          {match.assessment.post.hasRealPermalink === false && <Chip size="small" color="warning" label="No direct URL" />}
                         </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          {match.assessment.post.originalPostedAt
+                            ? `Posted: ${new Date(match.assessment.post.originalPostedAt).toLocaleString('en-GB')}`
+                            : 'Posted: date unavailable'}
+                          {' · '}First collected: {new Date(match.assessment.post.firstDiscoveredAt).toLocaleString('en-GB')}
+                        </Typography>
                         <Typography>{match.assessment.post.latestCapturedText || match.assessment.summary || 'No post text.'}</Typography>
                         {match.reason && <Typography color="text.secondary">{match.reason}</Typography>}
                         {match.suggestedIntro && <Alert severity="info">{match.suggestedIntro}</Alert>}
+                        <PostLinkActions
+                          post={match.assessment.post}
+                          showStoredUrl={false}
+                          onUpdated={(updated) => {
+                            setMemberMatches((current) => current.map((row) => (
+                              row.id === match.id
+                                ? {
+                                  ...row,
+                                  assessment: {
+                                    ...row.assessment,
+                                    post: {
+                                      ...row.assessment.post,
+                                      canonicalPostUrl: updated.canonicalPostUrl,
+                                      hasRealPermalink: updated.hasRealPermalink,
+                                      searchPostUrl: updated.searchPostUrl,
+                                      openPostUrl: updated.openPostUrl,
+                                      searchExcerpt: updated.searchExcerpt,
+                                    },
+                                  },
+                                }
+                                : row
+                            )));
+                            setMessage('Direct Facebook post URL saved.');
+                          }}
+                        />
                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                          <Button size="small" href={match.assessment.post.canonicalPostUrl} target="_blank">Open Post</Button>
                           <Button size="small" onClick={() => selectedMember && void copyFacebookName(selectedMember)}>Copy FB</Button>
                           <Button size="small" onClick={() => void updateAiMatch(match, 'copied')}>Copied</Button>
                           <Button size="small" color="success" onClick={() => void updateAiMatch(match, 'introduced')}>Introduced</Button>

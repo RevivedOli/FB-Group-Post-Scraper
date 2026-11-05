@@ -2,17 +2,27 @@
   "name": "fb-group-post-scraper",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "main": "apps/desktop/main.cjs",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace @local-group-monitor/api & npm run dev --workspace @local-group-monitor/web",
     "build": "npm run build --workspace @local-group-monitor/shared && npm run build --workspace @local-group-monitor/api && npm run build --workspace @local-group-monitor/web",
+    "desktop": "npm run build && electron apps/desktop",
+    "desktop:pack": "npm run build && electron-builder --project apps/desktop --mac dir",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspace @local-group-monitor/shared && npm run typecheck --workspace @local-group-monitor/api && npm run typecheck --workspace @local-group-monitor/web",
     "db:migrate": "node scripts/db-migrate.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "collector:ui": "node scripts/collector-ui.mjs",
+    "collector:api": "node scripts/collector-api.mjs"
   },
   "devDependencies": {
+    "electron": "37.10.3",
+    "electron-builder": "26.15.3",
     "prisma": "^6.13.0",
     "typescript": "^5.5.4"
   }

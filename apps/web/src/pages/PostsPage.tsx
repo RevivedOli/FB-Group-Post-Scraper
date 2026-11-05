@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PostDetailResponse, PostListResponse } from '@local-group-monitor/shared';
 import { reviewStatuses } from '@local-group-monitor/shared';
 import {
@@ -16,31 +16,20 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  Link,
   MenuItem,
+  Pagination,
   Stack,
   Switch,
   TextField,
   Typography,
 } from '@mui/material';
 import { apiGet, apiSend } from '../api/client';
+import { PostCard, type PostCardAssessment, type PostCardPost } from '../components/PostCard';
+import { PostLinkActions, type PostLinkFields } from '../components/PostLinkActions';
 
-interface PostWithGroup {
-  id: string;
-  canonicalPostUrl: string;
-  authorName?: string | null;
-  latestCapturedText?: string | null;
-  originalTimestampLabel?: string | null;
-  originalPostedAt?: string | null;
-  firstDiscoveredAt: string;
-  reviewStatus: string;
-  analysisStatus: string;
-  hasImages: boolean;
-  imageCount: number;
-  extractionConfidence?: number | null;
-  group?: { friendlyName: string };
-  aiAssessments?: AiAssessment[];
-}
+import { CollectorStatus } from '../components/CollectorStatus';
+
+type PostWithGroup = PostCardPost;
 
 interface GroupOption {
   id: string;
@@ -53,22 +42,7 @@ interface MemberOption {
   category: string;
 }
 
-interface AiAssessment {
-  id: string;
-  status: string;
-  intent?: string | null;
-  isReferralOpportunity?: boolean | null;
-  confidence?: number | null;
-  summary?: string | null;
-  errorMessage?: string | null;
-  memberMatches?: Array<{
-    id: string;
-    scorePercent: string;
-    reason?: string | null;
-    suggestedIntro?: string | null;
-    referralMember?: { id: string; name: string; category: string; businessName?: string | null; facebookName?: string | null; facebookProfileUrl?: string | null };
-  }>;
-}
+type AiAssessment = PostCardAssessment;
 
 type ReviewFilter = 'all' | typeof reviewStatuses[number];
 type ConfidenceFilter = 'all' | '0.45' | '0.8' | '0.9';
@@ -124,6 +98,10 @@ function formatAiRunMessage(result: Record<string, unknown>) {
 }
 
 export function PostsPage() {
+  const loadSequence=useRef(0);
+  const [loading,setLoading]=useState(false);
+  const [page,setPage]=useState(1);
+  const [appliedSearch,setAppliedSearch]=useState('');
   const [posts, setPosts] = useState<PostWithGroup[]>([]);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [members, setMembers] = useState<MemberOption[]>([]);
@@ -153,19 +131,24 @@ export function PostsPage() {
   const rawJson = useMemo(() => rawPost ? JSON.stringify(rawPost, null, 2) : '', [rawPost]);
 
   const load = () => {
-    const params = new URLSearchParams({ reviewStatus: reviewFilter, groupId: groupFilter });
+    const sequence=++loadSequence.current;
+    setLoading(true);
+    const params = new URLSearchParams({ page:String(page),pageSize:'25',reviewStatus: reviewFilter, groupId: groupFilter });
     if (confidenceFilter !== 'all') params.set('minConfidence', confidenceFilter);
     if (aiReferralOnly) params.set('aiReferralOnly', 'true');
     if (aiIntent !== 'all') params.set('aiIntent', aiIntent);
     if (aiMemberId !== 'all') params.set('aiMemberId', aiMemberId);
-    if (search.trim()) params.set('search', search.trim());
+    if (appliedSearch) params.set('search', appliedSearch);
     return apiGet<PostListResponse>(`/posts?${params.toString()}`)
       .then((result) => {
+        if(sequence!==loadSequence.current)return;
+        setError(undefined);
         setPosts(result.items as PostWithGroup[]);
         setTotal(result.total);
         setCounts(result.counts);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => {if(sequence!==loadSequence.current)return;setPosts([]);setTotal(0);setCounts(undefined);setError(err instanceof Error ? err.message : String(err));})
+      .finally(()=>{if(sequence===loadSequence.current)setLoading(false);});
   };
 
   useEffect(() => {
@@ -173,9 +156,14 @@ export function PostsPage() {
     void apiGet<{ members: MemberOption[] }>('/referrals').then((result) => setMembers(result.members)).catch(() => setMembers([]));
   }, []);
 
+  useEffect(()=>{setPage(1);},[reviewFilter,groupFilter,confidenceFilter,aiReferralOnly,aiIntent,aiMemberId,appliedSearch]);
+
   useEffect(() => {
+    setPosts([]);setTotal(0);setError(undefined);
     void load();
-  }, [reviewFilter, groupFilter, confidenceFilter, aiReferralOnly, aiIntent, aiMemberId]);
+    const timer = window.setInterval(() => void load(), 30000);
+    return () => {window.clearInterval(timer);loadSequence.current++;};
+  }, [page,reviewFilter, groupFilter, confidenceFilter, aiReferralOnly, aiIntent, aiMemberId, appliedSearch]);
 
   async function removePost(post: PostWithGroup) {
     if (!window.confirm('Delete this collected post from the local database?')) return;
@@ -321,6 +309,7 @@ export function PostsPage() {
         </Stack>
       </Stack>
 
+      <CollectorStatus onSync={() => { void load(); void apiGet<GroupOption[]>('/groups').then(setGroups); }} />
       {message && <Alert severity="success">{message}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
 
@@ -354,67 +343,42 @@ export function PostsPage() {
             </TextField>
             <FormControlLabel control={<Switch checked={aiReferralOnly} onChange={(event) => setAiReferralOnly(event.target.checked)} />} label="AI referrals only" />
             <TextField size="small" label="Search" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void load(); }} sx={{ minWidth: 260 }} />
-            <Button variant="contained" onClick={() => void load()}>Search</Button>
+            <Button variant="contained" onClick={()=>{setPage(1);if(appliedSearch===search.trim())void load();else setAppliedSearch(search.trim());}}>Search</Button>
           </Stack>
         </CardContent>
       </Card>
 
-      <Typography color="text.secondary">{total} post(s) in this view.</Typography>
+      <Typography color="text.secondary">{loading ? 'Loading matching posts…' : error ? 'Results unavailable — retry after the error is resolved.' : `${total} post(s) in this view.`}</Typography>
 
+      {(aiIntent!=='all'||aiReferralOnly||aiMemberId!=='all')&&<Typography variant="body2" color="text.secondary">AI filters use each post’s most recent completed assessment. Looking for help includes requests with no directory member match.</Typography>}
+      {total>25&&<Pagination page={page} count={Math.ceil(total/25)} onChange={(_,value)=>setPage(value)} disabled={loading} />}
       {posts.length === 0 ? (
-        <Card><CardContent><Typography color="text.secondary">No posts match this view.</Typography></CardContent></Card>
+        <Card><CardContent><Typography color="text.secondary">{loading?'Loading…':error?'Could not load results. Refresh to retry.':'No posts match this view.'}</Typography></CardContent></Card>
       ) : posts.map((post) => (
-        <Card key={post.id}>
-          <CardContent>
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" useFlexGap>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip size="small" label={post.group?.friendlyName ?? 'Group'} />
-                  {post.authorName && <Chip size="small" label={post.authorName} />}
-                  <Chip size="small" label={post.reviewStatus} color={post.reviewStatus === 'useful' ? 'success' : post.reviewStatus === 'ignored' ? 'default' : post.reviewStatus === 'requires_review' ? 'warning' : 'primary'} />
-                  {!post.aiAssessments?.[0] && <Chip size="small" label={post.analysisStatus} />}
-                  {post.aiAssessments?.[0] && (
-                    <Chip
-                      size="small"
-                      label={`AI: ${post.aiAssessments[0].status === 'completed' ? post.aiAssessments[0].intent ?? 'done' : post.aiAssessments[0].status}`}
-                      color={post.aiAssessments[0].isReferralOpportunity ? 'success' : post.aiAssessments[0].status === 'failed' ? 'error' : 'default'}
-                    />
-                  )}
-                  {post.originalTimestampLabel && <Chip size="small" label={post.originalTimestampLabel} />}
-                  <Chip size="small" label={post.hasImages ? `${post.imageCount} image(s)` : 'No images'} />
-                  {typeof post.extractionConfidence === 'number' && <Chip size="small" label={`Confidence ${Math.round(post.extractionConfidence * 100)}%`} />}
-                </Stack>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Button size="small" disabled={Boolean(busy)} onClick={() => void openRawData(post)}>
-                    {busy === `${post.id}:raw` ? 'Loading...' : 'Raw Data'}
-                  </Button>
-                  <Button size="small" disabled={Boolean(busy)} onClick={() => void runAi(post, Boolean(post.aiAssessments?.length))}>
-                    {busy === `${post.id}:ai` ? 'Running...' : post.aiAssessments?.length ? 'Rerun AI' : 'Run AI'}
-                  </Button>
-                  <Button size="small" disabled={Boolean(busy)} onClick={() => void updateReview(post, 'useful')}>Useful</Button>
-                  <Button size="small" color="warning" disabled={Boolean(busy)} onClick={() => void updateReview(post, 'requires_review')}>Review</Button>
-                  <Button size="small" color="inherit" disabled={Boolean(busy)} onClick={() => void updateReview(post, 'ignored')}>Ignore</Button>
-                  <Button size="small" color="error" disabled={busy === post.id} onClick={() => void removePost(post)}>
-                    {busy === post.id ? 'Deleting...' : 'Delete'}
-                  </Button>
-                </Stack>
-              </Stack>
-              <Typography>{post.latestCapturedText || 'No text captured.'}</Typography>
-              {post.aiAssessments?.[0]?.summary && <Typography color="text.secondary">AI: {post.aiAssessments[0].summary}</Typography>}
-              {post.aiAssessments?.[0]?.memberMatches && post.aiAssessments[0].memberMatches.length > 0 && (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {post.aiAssessments[0].memberMatches.map((match) => (
-                    <Chip key={match.id} size="small" label={`${match.referralMember?.name ?? 'Member'} ${match.scorePercent}`} />
-                  ))}
-                </Stack>
-              )}
-              <Link href={post.canonicalPostUrl} target="_blank" color="text.secondary" underline="hover">{post.canonicalPostUrl}</Link>
-              <Typography color="text.secondary">
-                Posted {post.originalPostedAt ? new Date(post.originalPostedAt).toLocaleString() : 'Unknown'} · Discovered {new Date(post.firstDiscoveredAt).toLocaleString()}
-              </Typography>
-            </Stack>
-          </CardContent>
-        </Card>
+        <PostCard
+          key={post.id}
+          post={post}
+          busy={busy}
+          onOpenRaw={(item) => void openRawData(item)}
+          onRunAi={(item, force) => void runAi(item, force)}
+          onUpdateReview={(item, status) => void updateReview(item, status)}
+          onRemove={(item) => void removePost(item)}
+          onLinkUpdated={(postId, updated: PostLinkFields) => {
+            setPosts((current) => current.map((item) => (
+              item.id === postId
+                ? {
+                  ...item,
+                  canonicalPostUrl: updated.canonicalPostUrl,
+                  hasRealPermalink: updated.hasRealPermalink,
+                  searchPostUrl: updated.searchPostUrl,
+                  openPostUrl: updated.openPostUrl,
+                  searchExcerpt: updated.searchExcerpt,
+                }
+                : item
+            )));
+            setMessage('Direct Facebook post URL saved.');
+          }}
+        />
       ))}
 
       <Dialog open={Boolean(rawPost)} onClose={() => setRawPost(undefined)} maxWidth="md" fullWidth>
@@ -427,8 +391,33 @@ export function PostsPage() {
                   <Stack spacing={1.25}>
                     <Typography variant="h6">Captured Post</Typography>
                     <Typography>{String(rawPost.latestCapturedText ?? 'No text captured.')}</Typography>
-                    {typeof rawPost.canonicalPostUrl === 'string' && (
-                      <Link href={rawPost.canonicalPostUrl} target="_blank" underline="hover">{rawPost.canonicalPostUrl}</Link>
+                    {typeof rawPost.id === 'string' && typeof rawPost.canonicalPostUrl === 'string' && (
+                      <PostLinkActions
+                        post={{
+                          id: rawPost.id,
+                          canonicalPostUrl: rawPost.canonicalPostUrl,
+                          hasRealPermalink: Boolean(rawPost.hasRealPermalink),
+                          searchPostUrl: typeof rawPost.searchPostUrl === 'string' ? rawPost.searchPostUrl : null,
+                          openPostUrl: typeof rawPost.openPostUrl === 'string' ? rawPost.openPostUrl : undefined,
+                          searchExcerpt: typeof rawPost.searchExcerpt === 'string' ? rawPost.searchExcerpt : null,
+                        }}
+                        onUpdated={(updated) => {
+                          setRawPost((current) => (current ? { ...current, ...updated } : current));
+                          setPosts((current) => current.map((item) => (
+                            item.id === updated.id
+                              ? {
+                                ...item,
+                                canonicalPostUrl: updated.canonicalPostUrl,
+                                hasRealPermalink: updated.hasRealPermalink,
+                                searchPostUrl: updated.searchPostUrl,
+                                openPostUrl: updated.openPostUrl,
+                                searchExcerpt: updated.searchExcerpt,
+                              }
+                              : item
+                          )));
+                          setMessage('Direct Facebook post URL saved.');
+                        }}
+                      />
                     )}
                     <Typography color="text.secondary">
                       {String(rawPost.authorName ?? 'Unknown author')} · {typeof rawPost.firstDiscoveredAt === 'string' ? new Date(rawPost.firstDiscoveredAt).toLocaleString() : 'Unknown date'}

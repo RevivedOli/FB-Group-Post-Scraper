@@ -1,16 +1,20 @@
 import type { AiCuratedModel, AiModelPricing, AiProviderId } from '../types/ai.js';
 
-export const AI_PRICING_CATALOG_VERSION = '2026-08-05';
+export const AI_PRICING_CATALOG_VERSION = '2026-11-04';
 
 export const CUSTOM_MODEL_SENTINEL = '__custom__';
 
 export const OPENAI_CURATED_MODELS: AiCuratedModel[] = [
   {
+    id: 'gpt-6-luna', label: 'GPT-6 Luna', provider: 'openai',
+    description: 'Efficient structured referral matching (reasoning disabled)', recommended: true,
+    inputCostPerMillion: 0.10, cachedInputCostPerMillion: 0.01, outputCostPerMillion: 0.50,
+  },
+  {
     id: 'gpt-5.6-luna',
     label: 'GPT-5.6 Luna',
     provider: 'openai',
-    description: 'Efficient default for high-volume classification and matching',
-    recommended: true,
+    description: 'Previous referral-matching model',
     inputCostPerMillion: 0.2,
     cachedInputCostPerMillion: 0.02,
     outputCostPerMillion: 1.2,

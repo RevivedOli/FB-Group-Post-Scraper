@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import type { AiPricingSnapshot, AiUsageByDay, AiUsageByProviderModel, AiUsageReport, AiUsageTotals } from '@local-group-monitor/shared';
-import { matchesAiPrefilter, parseAiPrefilterPhrases, providerLabel } from '@local-group-monitor/shared';
+import {
+  isHashFallbackPostUrl,
+  isRealFacebookPostPermalink,
+  matchesAiPrefilter,
+  parseAiPrefilterPhrases,
+  providerLabel,
+  resolvePostOpenUrl,
+  withPostLinkFields,
+} from '@local-group-monitor/shared';
 import { prisma } from '../db/prisma.js';
 import { getSettings } from './settings.service.js';
 import {
@@ -15,10 +23,13 @@ import {
 } from './ai-provider.service.js';
 import { getProviderApiKey } from './ai-credentials.service.js';
 
+import { notificationConfig, enqueueReferralNotifications } from './notifications.service.js';
+
 const POST_TEXT_MIN_LENGTH = 12;
 const DEFAULT_QUEUE_LIMIT = 1000;
 const MAX_REMOTE_CONCURRENCY = 20;
 let processorRunning = false;
+let processorWakeRequested = false;
 let processorStartedAt: Date | undefined;
 let processedInCurrentRun = 0;
 const activeJobs = new Map<string, string | undefined>();
@@ -74,9 +85,7 @@ interface ParsedAiAssessment {
   recommendedMembers: AiRecommendation[];
 }
 
-export function isRealFacebookPostPermalink(url?: string | null) {
-  return Boolean(url && /^https:\/\/www\.facebook\.com\/groups\/[^/#?]+\/posts\/\d+/.test(url));
-}
+export { isRealFacebookPostPermalink };
 
 function promptVersion(promptTemplate: string, providerKey: string, prefilterKey = '') {
   return createHash('sha256').update(`${providerKey}\n${promptTemplate}\n${prefilterKey}`).digest('hex').slice(0, 16);
@@ -249,11 +258,19 @@ export function validateParsedAssessment(value: unknown): ParsedAiAssessment {
 }
 
 function postPromptData(post: Awaited<ReturnType<typeof getPostForAssessment>>) {
+  const links = resolvePostOpenUrl({
+    canonicalPostUrl: post.canonicalPostUrl,
+    latestCapturedText: post.latestCapturedText,
+    groupCanonicalUrl: post.group?.canonicalGroupUrl,
+  });
   return {
     id: post.id,
     group: post.group?.friendlyName,
     authorName: post.authorName,
-    canonicalPostUrl: post.canonicalPostUrl,
+    // Prefer a navigable Facebook URL (real permalink or group search) over the local hash fallback.
+    canonicalPostUrl: links.openPostUrl,
+    hasRealPermalink: links.hasRealPermalink,
+    searchPostUrl: links.searchPostUrl,
     text: truncateForPrompt(post.latestCapturedText, 3500),
     ocrText: truncateForPrompt(post.ocrText, 1200),
   };
@@ -473,7 +490,7 @@ export async function dedupeAiMemberMatches() {
 async function getPostForAssessment(postId: string) {
   const post = await prisma.post.findUnique({
     where: { id: postId },
-    include: { group: { select: { friendlyName: true } } },
+    include: { group: { select: { friendlyName: true, canonicalGroupUrl: true } } },
   });
   if (!post) throw new Error('Post not found.');
   return post;
@@ -552,20 +569,40 @@ export function getAiActivity() {
 }
 
 export function eligiblePost(post: {
+  facebookPostId?: string | null;
   canonicalPostUrl: string;
   latestCapturedText?: string | null;
   ocrText?: string | null;
   extractionConfidence?: number | null;
+  extractionStrategy?: string | null;
 }, settings: Awaited<ReturnType<typeof getSettings>>) {
-  if (!settings.ai.enabled) return { eligible: false, reason: 'ai_disabled', soft: false as const };
-  if (settings.ai.requireRealFacebookPermalink && !isRealFacebookPostPermalink(post.canonicalPostUrl)) {
-    return { eligible: false, reason: 'missing_real_permalink', soft: false as const };
+  if (!settings.ai.enabled) {
+    return { eligible: false, reason: 'ai_disabled', soft: false as const, matchedPhrase: undefined as string | undefined };
+  }
+
+  const hasRealPermalink = isRealFacebookPostPermalink(post.canonicalPostUrl);
+  const isHashFallback = isHashFallbackPostUrl(post.canonicalPostUrl)
+    || post.extractionStrategy === 'text_hash_fallback';
+
+  // Missing permalink is a navigation concern. Hash-fallback posts still go through the prefilter/LLM.
+  if (settings.ai.requireRealFacebookPermalink && !hasRealPermalink && !isHashFallback) {
+    return { eligible: false, reason: 'missing_real_permalink', soft: false as const, matchedPhrase: undefined as string | undefined };
   }
   if ((post.latestCapturedText ?? '').trim().length < POST_TEXT_MIN_LENGTH) {
-    return { eligible: false, reason: 'missing_post_context', soft: false as const };
+    return { eligible: false, reason: 'missing_post_context', soft: false as const, matchedPhrase: undefined as string | undefined };
   }
-  if ((post.extractionConfidence ?? 0) < settings.ai.minExtractionConfidence) {
-    return { eligible: false, reason: 'low_extraction_confidence', soft: false as const };
+  // Structured HTTP records have no DOM extraction score. Validate their source
+  // identity instead of assigning a fabricated confidence or lowering the DOM floor.
+  const structuredIdentity = /^https:\/\/www\.facebook\.com\/groups\/\d+\/posts\/(\d+)\/?$/.exec(post.canonicalPostUrl);
+  const structuredCollector = post.extractionStrategy === 'facebook_gql'
+    && Boolean(structuredIdentity && structuredIdentity[1] === post.facebookPostId);
+  if (post.extractionStrategy === 'facebook_gql' && !structuredCollector) {
+    return { eligible: false, reason: 'invalid_collector_identity', soft: false as const, matchedPhrase: undefined as string | undefined };
+  }
+  // Hash-fallback confidence is artificially low (0.45) because the permalink is missing — do not
+  // use that circular score to block AI. Real-permalink posts still respect the confidence floor.
+  if (hasRealPermalink && !structuredCollector && (post.extractionConfidence ?? 0) < settings.ai.minExtractionConfidence) {
+    return { eligible: false, reason: 'low_extraction_confidence', soft: false as const, matchedPhrase: undefined as string | undefined };
   }
   if (settings.ai.prefilterEnabled) {
     const phrases = parseAiPrefilterPhrases(settings.ai.prefilterPhrases);
@@ -573,11 +610,12 @@ export function eligiblePost(post: {
       const haystack = `${post.latestCapturedText ?? ''}\n${post.ocrText ?? ''}`;
       const match = matchesAiPrefilter(haystack, phrases);
       if (!match.matched) {
-        return { eligible: false, reason: 'prefilter_no_match', soft: true as const };
+        return { eligible: false, reason: 'prefilter_no_match', soft: true as const, matchedPhrase: undefined as string | undefined };
       }
+      return { eligible: true, reason: 'eligible', soft: false as const, matchedPhrase: match.matchedPhrase };
     }
   }
-  return { eligible: true, reason: 'eligible', soft: false as const };
+  return { eligible: true, reason: 'eligible', soft: false as const, matchedPhrase: undefined as string | undefined };
 }
 
 export async function queuePostForAi(postId: string, options: {
@@ -646,6 +684,7 @@ export async function queuePostForAi(postId: string, options: {
             enabled: settings.ai.prefilterEnabled,
             bypassed: bypassSoftFilter,
             reason: eligibility.reason,
+            matchedPhrase: eligibility.matchedPhrase ?? null,
             phrases: settings.ai.prefilterEnabled ? parseAiPrefilterPhrases(settings.ai.prefilterPhrases) : [],
           },
         },
@@ -693,6 +732,14 @@ export async function requeueAssessment(assessmentId: string, options: {
     throw new Error(describeSkipReason(eligibility.reason));
   }
 
+  const prefilterPayload = {
+    enabled: settings.ai.prefilterEnabled,
+    bypassed: bypassSoftFilter,
+    reason: eligibility.reason,
+    matchedPhrase: eligibility.matchedPhrase ?? null,
+    phrases: settings.ai.prefilterEnabled ? parseAiPrefilterPhrases(settings.ai.prefilterPhrases) : [],
+  };
+
   if (!willProcess) {
     const skipped = await prisma.postAiAssessment.update({
       where: { id: assessmentId },
@@ -705,6 +752,15 @@ export async function requeueAssessment(assessmentId: string, options: {
         errorMessage: eligibility.reason,
         startedAt: null,
         completedAt: new Date(),
+        inputPayload: {
+          queuedWith: {
+            provider: provider.provider,
+            providerLabel: provider.label,
+            model: provider.model,
+            baseUrl: provider.baseUrl,
+            prefilter: prefilterPayload,
+          },
+        },
       },
     });
     await syncPostAnalysisStatus(existing.postId, 'skipped');
@@ -734,6 +790,15 @@ export async function requeueAssessment(assessmentId: string, options: {
       summary: null,
       startedAt: null,
       completedAt: null,
+      inputPayload: {
+        queuedWith: {
+          provider: provider.provider,
+          providerLabel: provider.label,
+          model: provider.model,
+          baseUrl: provider.baseUrl,
+          prefilter: prefilterPayload,
+        },
+      },
     },
   });
   await syncPostAnalysisStatus(existing.postId, 'pending');
@@ -823,17 +888,28 @@ export async function queueFilteredPostsForAi(filters: AiRerunFilters = {}) {
   const where: Prisma.PostWhereInput = {
     monitoringStatus: 'active',
     latestCapturedText: { not: null },
-    extractionConfidence: { gte: minConfidence },
+    OR: [
+      { extractionConfidence: { gte: minConfidence } },
+      { extractionStrategy: 'text_hash_fallback' },
+      // Candidate selection only: eligiblePost still verifies structured identity/text.
+      { extractionStrategy: 'facebook_gql' },
+      { canonicalPostUrl: { contains: '#post-' } },
+    ],
   };
 
   if (filters.groupId && filters.groupId !== 'all') where.groupId = filters.groupId;
   if (filters.reviewStatus && filters.reviewStatus !== 'all') where.reviewStatus = filters.reviewStatus;
   if (filters.search?.trim()) {
     const query = filters.search.trim();
-    where.OR = [
-      { latestCapturedText: { contains: query } },
-      { authorName: { contains: query } },
-      { canonicalPostUrl: { contains: query } },
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        OR: [
+          { latestCapturedText: { contains: query } },
+          { authorName: { contains: query } },
+          { canonicalPostUrl: { contains: query } },
+        ],
+      },
     ];
   }
   if (typeof filters.discoveredWithinDays === 'number' && filters.discoveredWithinDays > 0) {
@@ -925,7 +1001,7 @@ function providerFromAssessment(assessment: { provider?: string | null; model?: 
   return getProviderConfig(settings);
 }
 
-export async function runAssessment(assessmentId: string) {
+export async function runAssessment(assessmentId: string, options: {notifyExistingPost?:boolean} = {}) {
   const settings = await getSettings();
   const existing = await prisma.postAiAssessment.findUnique({ where: { id: assessmentId } });
   if (!existing) throw new Error('Assessment not found.');
@@ -955,6 +1031,9 @@ export async function runAssessment(assessmentId: string) {
     const built = buildAssessmentPrompt(post, members, existing.promptText || settings.ai.promptTemplate);
     prompt = built.prompt;
     inputPayload = built.inputPayload;
+    // Persist the actual assembled request before sending, so running details
+    // do not mislabel enqueue metadata as model input.
+    await prisma.postAiAssessment.update({ where:{id:assessmentId}, data:{renderedPrompt:prompt,inputPayload:inputPayload as object} });
     const result = await callAiProvider(built.prompt, built.userInput, provider, settings.ai.requestTimeoutSeconds);
     usage = result.usage;
     rawText = result.text;
@@ -975,6 +1054,7 @@ export async function runAssessment(assessmentId: string) {
       isReferralOpportunity: parsed.intent === 'looking_for_help' && validMatches.length > 0,
     };
 
+    const alerts = await notificationConfig();
     await prisma.$transaction(async (tx) => {
       await tx.postAiAssessment.update({
         where: { id: assessmentId },
@@ -1005,6 +1085,7 @@ export async function runAssessment(assessmentId: string) {
         },
       });
       await syncAiMemberMatchesForPost(tx, assessmentId, assessment.postId, validMatches);
+      await enqueueReferralNotifications(tx, alerts, post, members, validMatches, {allowExistingPost:options.notifyExistingPost});
     });
     await syncPostAnalysisStatus(assessment.postId, 'completed');
     logAiActivity({
@@ -1071,7 +1152,10 @@ async function claimNextPendingAssessment() {
 }
 
 export function startAiQueueProcessor(limit = DEFAULT_QUEUE_LIMIT) {
-  if (processorRunning) return { started: false, reason: 'processor_already_running' };
+  if (processorRunning) {
+    processorWakeRequested = true;
+    return { started: false, reason: 'processor_already_running' };
+  }
   void processAiQueue(limit).catch((error) => {
     console.error('AI queue processor failed:', error);
     logAiActivity({ level: 'error', message: `AI queue processor failed: ${error instanceof Error ? error.message : String(error)}` });
@@ -1094,6 +1178,7 @@ export async function resumeAiQueueIfNeeded() {
 export async function processAiQueue(limit = DEFAULT_QUEUE_LIMIT) {
   if (processorRunning) return { started: false, reason: 'processor_already_running' };
   processorRunning = true;
+  processorWakeRequested = false;
   processorStartedAt = new Date();
   processedInCurrentRun = 0;
   activeJobs.clear();
@@ -1139,6 +1224,8 @@ export async function processAiQueue(limit = DEFAULT_QUEUE_LIMIT) {
         active.add(task);
       }
       if (active.size > 0) await Promise.race(active);
+      // A new enqueue may arrive after an empty claim while another job finishes.
+      if (drained && processorWakeRequested) { drained = false; processorWakeRequested = false; }
     }
 
     logAiActivity({ level: 'info', message: `AI processor stopped after processing ${processed} item(s) with concurrency ${concurrency}.` });
@@ -1253,7 +1340,8 @@ export async function listAiAssessments(filters: AiAssessmentFilters = {}) {
             originalTimestampLabel: true,
             originalPostedAt: true,
             extractionConfidence: true,
-            group: { select: { friendlyName: true } },
+            extractionStrategy: true,
+            group: { select: { friendlyName: true, canonicalGroupUrl: true } },
           },
         },
         memberMatches: { include: { referralMember: true }, orderBy: { score: 'desc' } },
@@ -1261,7 +1349,13 @@ export async function listAiAssessments(filters: AiAssessmentFilters = {}) {
     }),
     prisma.postAiAssessment.count({ where }),
   ]);
-  return { items, total };
+  return {
+    items: items.map((item) => ({
+      ...item,
+      post: item.post ? withPostLinkFields(item.post) : item.post,
+    })),
+    total,
+  };
 }
 
 function emptyTotals(): AiUsageTotals {

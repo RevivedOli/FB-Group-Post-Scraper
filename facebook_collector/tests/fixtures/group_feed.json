@@ -1,0 +1,1 @@
+{"data":{"node":{"__typename":"Group","id":"123","group_feed":{"edges":[{"node":{"__typename":"Story","post_id":"900","creation_time":1793788200,"actors":[],"comet_sections":{"content":{"story":{"message":{"text":"Can anyone recommend an electrician?"},"wwwURL":"https://www.facebook.com/groups/123/posts/900"}}}}}],"page_info":{"has_next_page":false,"end_cursor":null}}}}}

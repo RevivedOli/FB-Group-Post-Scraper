@@ -8,6 +8,7 @@ import type {
   AiCuratedModel,
 } from '@local-group-monitor/shared';
 import { CUSTOM_MODEL_SENTINEL, OPENAI_CURATED_MODELS, XAI_CURATED_MODELS } from '@local-group-monitor/shared';
+import { OperationsSettings } from '../components/OperationsSettings';
 import { apiGet, apiSend } from '../api/client';
 
 function formatAiActionMessage(label: string, result: Record<string, unknown>) {
@@ -204,6 +205,7 @@ export function SettingsPage() {
 
   return (
     <Stack spacing={2}>
+      <OperationsSettings />
       <Card>
         <CardContent>
           <Stack spacing={2}>
@@ -257,8 +259,14 @@ export function SettingsPage() {
               {aiProvider === 'ollama' ? (
                 <FormControlLabel control={<Switch checked={ai.autoStartOllama} disabled={busy} onChange={(event) => void save({ ...settings, ai: { ...ai, autoStartOllama: event.target.checked } })} />} label="Auto-start Ollama" />
               ) : null}
-              <FormControlLabel control={<Switch checked={ai.requireRealFacebookPermalink} disabled={busy} onChange={(event) => void save({ ...settings, ai: { ...ai, requireRealFacebookPermalink: event.target.checked } })} />} label="Require real permalink" />
+              <FormControlLabel
+                control={<Switch checked={ai.requireRealFacebookPermalink} disabled={busy} onChange={(event) => void save({ ...settings, ai: { ...ai, requireRealFacebookPermalink: event.target.checked } })} />}
+                label="Require real permalink for non-fallback posts"
+              />
             </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Missing direct Facebook links are a navigation issue, not an AI blocker. Posts without a permalink still run the trigger-phrase prefilter and get a “Search Facebook” link so you can find and paste the real URL later.
+            </Typography>
 
             <Card variant="outlined">
               <CardContent>

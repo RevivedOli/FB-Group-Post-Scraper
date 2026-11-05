@@ -1,3 +1,4 @@
+import { withPostLinkFields } from '@local-group-monitor/shared';
 import { prisma } from '../db/prisma.js';
 import { pickPreferredAiMemberMatch } from './ai-assessment.service.js';
 
@@ -436,7 +437,9 @@ export async function listMemberAiMatches(
                 latestCapturedText: true,
                 authorName: true,
                 firstDiscoveredAt: true,
-                group: { select: { friendlyName: true } },
+                originalPostedAt: true,
+                extractionStrategy: true,
+                group: { select: { friendlyName: true, canonicalGroupUrl: true } },
               },
             },
           },
@@ -459,7 +462,13 @@ export async function listMemberAiMatches(
   ));
   deduped.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   const total = deduped.length;
-  const items = deduped.slice((page - 1) * pageSize, page * pageSize);
+  const items = deduped.slice((page - 1) * pageSize, page * pageSize).map((item) => ({
+    ...item,
+    assessment: {
+      ...item.assessment,
+      post: withPostLinkFields(item.assessment.post),
+    },
+  }));
   return { member, items, total };
 }
 

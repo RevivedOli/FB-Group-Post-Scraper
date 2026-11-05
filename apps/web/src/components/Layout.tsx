@@ -1,6 +1,6 @@
 import { Box, List, ListItemButton, ListItemText, Typography } from '@mui/material';
 
-const nav = ['Dashboard', 'Posts', 'Groups', 'Referral Directory', 'Referral Queue', 'AI Usage', 'Settings'];
+const nav = ['Dashboard', 'Posts', 'Groups', 'Referral Directory', 'Visitor Opportunities', 'Referral Queue', 'AI Usage', 'Settings'];
 const SIDEBAR_WIDTH = 260;
 
 export function Layout({ page, setPage, children }: { page: string; setPage: (p: string) => void; children: React.ReactNode }) {

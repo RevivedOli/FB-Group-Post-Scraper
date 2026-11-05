@@ -198,3 +198,78 @@ model AiMemberMatch {
   @@unique([assessmentId, referralMemberId])
   @@index([referralMemberId])
 }
+
+model NotificationDelivery {
+  id String @id
+  postId String
+  referralMemberId String
+  channel String @default("telegram")
+  payload Json
+  status String @default("pending")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  claimedAt DateTime?
+  sentAt DateTime?
+  messageId String?
+  errorMessage String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([postId, referralMemberId, channel])
+  @@index([status, availableAt])
+}
+
+model VisitorCategory {
+  id String @id
+  name String
+  includeRules String
+  excludeRules String
+  keywords Json
+  area String
+  priority String
+  reviewFlag String?
+  active Boolean @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model VisitorBusiness {
+  id String @id @default(cuid())
+  identityKey String @unique
+  name String
+  website String?
+  phone String?
+  status String @default("not contacted")
+  reviewNote String?
+  evidence VisitorEvidence[]
+  identities VisitorIdentity[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VisitorEvidence {
+  id String @id @default(cuid())
+  businessId String
+  business VisitorBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  postId String
+  categoryId String
+  contentHash String
+  matchedTerms Json
+  geographyEvidence String?
+  createdAt DateTime @default(now())
+  @@unique([postId, categoryId])
+  @@index([businessId])
+}
+
+model VisitorExclusion {
+  id String @id
+  name String
+  company String
+  reason String
+  status String
+  active Boolean @default(true)
+}
+
+model VisitorIdentity {
+  key String @id
+  businessId String
+  business VisitorBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}

@@ -88,7 +88,7 @@ export const defaultSettings: AppSettings = {
     provider: 'ollama',
     ollamaBaseUrl: 'http://127.0.0.1:11434',
     ollamaModel: 'qwen3:4b-instruct',
-    openaiModel: 'gpt-5.6-luna',
+    openaiModel: 'gpt-6-luna',
     openaiCustomModel: '',
     openaiCustomInputCostPerMillion: 0,
     openaiCustomCachedInputCostPerMillion: 0,
@@ -105,7 +105,8 @@ export const defaultSettings: AppSettings = {
     customCachedInputCostPerMillion: 0,
     customOutputCostPerMillion: 0,
     minExtractionConfidence: 0.8,
-    requireRealFacebookPermalink: true,
+    // Navigation preference only — hash-fallback posts still go through the AI prefilter.
+    requireRealFacebookPermalink: false,
     minMatchPercent: 20,
     staleRunningSeconds: 300,
     requestTimeoutSeconds: 180,

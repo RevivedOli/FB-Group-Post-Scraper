@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { deleteIgnoredPosts, deletePost, getPostDetail, listPosts, updatePostReviewStatus } from '../services/posts.service.js';
+import {
+  deleteIgnoredPosts,
+  deletePost,
+  getPostDetail,
+  listPosts,
+  PostUrlCollisionError,
+  updatePostCanonicalUrl,
+  updatePostReviewStatus,
+} from '../services/posts.service.js';
 
 export const postsRouter = Router();
 
@@ -33,6 +41,23 @@ postsRouter.patch('/:id/review', async (req, res, next) => {
   try {
     res.json(await updatePostReviewStatus(req.params.id, req.body.reviewStatus));
   } catch (error) {
+    next(error);
+  }
+});
+
+postsRouter.patch('/:id/canonical-url', async (req, res, next) => {
+  try {
+    const url = typeof req.body?.canonicalPostUrl === 'string' ? req.body.canonicalPostUrl : '';
+    res.json(await updatePostCanonicalUrl(req.params.id, url));
+  } catch (error) {
+    if (error instanceof PostUrlCollisionError) {
+      res.status(409).json({
+        error: error.message,
+        conflictingPostId: error.conflictingPostId,
+        conflictingFriendlyLabel: error.conflictingFriendlyLabel,
+      });
+      return;
+    }
     next(error);
   }
 });

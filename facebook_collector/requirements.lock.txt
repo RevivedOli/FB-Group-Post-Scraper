@@ -1,0 +1,14 @@
+attrs==26.1.0
+certifi==2026.10.23
+charset-normalizer==3.5.2
+facebook-gql-scraper @ git+https://github.com/XD-MHLOO/facebook-gql-scraper.git@3933a99a4eaac2e04754165b0ad7582b1ba452e9
+greenlet==3.5.6
+idna==3.20
+iso4217parse==0.6.2
+mini-racer==0.14.1
+playwright==1.64.1
+price-parser==0.5.1
+pyee==13.0.1
+requests==2.34.2
+typing_extensions==4.16.0
+urllib3==2.8.0

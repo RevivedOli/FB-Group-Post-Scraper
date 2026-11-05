@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Collapse, Dialog, DialogContent, DialogTitle, Divider, Link, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import type { AiPricingSnapshot, AiStatus } from '@local-group-monitor/shared';
 import { apiGet, apiSend } from '../api/client';
+import { PostLinkActions } from '../components/PostLinkActions';
 
 interface AiAssessment {
   id: string;
@@ -38,6 +39,10 @@ interface AiAssessment {
     originalTimestampLabel?: string | null;
     originalPostedAt?: string | null;
     extractionConfidence?: number | null;
+    hasRealPermalink?: boolean;
+    searchPostUrl?: string | null;
+    openPostUrl?: string;
+    searchExcerpt?: string | null;
     group?: { friendlyName: string };
   };
   memberMatches?: Array<{
@@ -463,9 +468,10 @@ export function AiQueuePage() {
                   <Chip size="small" label={item.status} color={item.status === 'completed' ? 'success' : item.status === 'failed' ? 'error' : item.status === 'skipped' ? 'warning' : 'default'} />
                   {item.status === 'skipped' && item.errorMessage ? <Chip size="small" label={skipReasonLabel(item.errorMessage)} color="warning" variant="outlined" /> : null}
                   {item.intent && <Chip size="small" label={item.intent} />}
-                  {item.isReferralOpportunity !== undefined && item.status !== 'skipped' && <Chip size="small" label={item.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
+                  {typeof item.isReferralOpportunity === 'boolean' && item.status === 'completed' && <Chip size="small" label={item.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
                   {typeof item.confidence === 'number' && <Chip size="small" label={`AI confidence ${Math.round(item.confidence * 100)}%`} />}
                   {item.post?.group?.friendlyName && <Chip size="small" label={item.post.group.friendlyName} />}
+                  {item.post?.hasRealPermalink === false && <Chip size="small" color="warning" label="No direct URL" />}
                   {item.status === 'running' && <Chip size="small" label={`Running ${ageLabel(item.startedAt)}`} color="warning" />}
                 </Stack>
                 {(item.summary || item.errorMessage) && (
@@ -489,7 +495,46 @@ export function AiQueuePage() {
                     ))}
                   </Stack>
                 )}
-                <Typography color="text.secondary">{item.post?.canonicalPostUrl}</Typography>
+                {item.post && (
+                  <Box onClick={(event) => event.stopPropagation()}>
+                    <PostLinkActions
+                      post={item.post}
+                      stopPropagation
+                      onUpdated={(updated) => {
+                        setItems((current) => current.map((row) => (
+                          row.id === item.id && row.post
+                            ? {
+                              ...row,
+                              post: {
+                                ...row.post,
+                                canonicalPostUrl: updated.canonicalPostUrl,
+                                hasRealPermalink: updated.hasRealPermalink,
+                                searchPostUrl: updated.searchPostUrl,
+                                openPostUrl: updated.openPostUrl,
+                                searchExcerpt: updated.searchExcerpt,
+                              },
+                            }
+                            : row
+                        )));
+                        setSelected((current) => (
+                          current?.id === item.id && current.post
+                            ? {
+                              ...current,
+                              post: {
+                                ...current.post,
+                                canonicalPostUrl: updated.canonicalPostUrl,
+                                hasRealPermalink: updated.hasRealPermalink,
+                                searchPostUrl: updated.searchPostUrl,
+                                openPostUrl: updated.openPostUrl,
+                                searchExcerpt: updated.searchExcerpt,
+                              },
+                            }
+                            : current
+                        ));
+                      }}
+                    />
+                  </Box>
+                )}
                 <Typography color="text.secondary">Created {new Date(item.createdAt).toLocaleString()}{item.completedAt ? ` · Completed ${new Date(item.completedAt).toLocaleString()}` : ''}</Typography>
                 {usageLine(item) && <Typography variant="body2" color="text.secondary">{usageLine(item)}</Typography>}
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -514,7 +559,42 @@ export function AiQueuePage() {
         ))}
       </Stack>
 
-      <AssessmentDetailsDialog assessment={selected} onClose={() => setSelected(undefined)} />
+      <AssessmentDetailsDialog
+        assessment={selected}
+        onClose={() => setSelected(undefined)}
+        onPostUpdated={(assessmentId, updated) => {
+          setItems((current) => current.map((row) => (
+            row.id === assessmentId && row.post
+              ? {
+                ...row,
+                post: {
+                  ...row.post,
+                  canonicalPostUrl: updated.canonicalPostUrl,
+                  hasRealPermalink: updated.hasRealPermalink,
+                  searchPostUrl: updated.searchPostUrl,
+                  openPostUrl: updated.openPostUrl,
+                  searchExcerpt: updated.searchExcerpt,
+                },
+              }
+              : row
+          )));
+          setSelected((current) => (
+            current?.id === assessmentId && current.post
+              ? {
+                ...current,
+                post: {
+                  ...current.post,
+                  canonicalPostUrl: updated.canonicalPostUrl,
+                  hasRealPermalink: updated.hasRealPermalink,
+                  searchPostUrl: updated.searchPostUrl,
+                  openPostUrl: updated.openPostUrl,
+                  searchExcerpt: updated.searchExcerpt,
+                },
+              }
+              : current
+          ));
+        }}
+      />
     </Stack>
   );
 }
@@ -533,7 +613,21 @@ function codePanel(value: unknown) {
   );
 }
 
-function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAssessment; onClose: () => void }) {
+function AssessmentDetailsDialog({
+  assessment,
+  onClose,
+  onPostUpdated,
+}: {
+  assessment?: AiAssessment;
+  onClose: () => void;
+  onPostUpdated?: (assessmentId: string, updated: {
+    canonicalPostUrl: string;
+    hasRealPermalink?: boolean;
+    searchPostUrl?: string | null;
+    openPostUrl?: string;
+    searchExcerpt?: string | null;
+  }) => void;
+}) {
   const [tab, setTab] = useState('recommendation');
   const [rawTab, setRawTab] = useState('prompt');
   if (!assessment) return null;
@@ -543,7 +637,7 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
       <DialogContent dividers>
         <Stack spacing={2}>
           <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tab value="recommendation" label={`Recommendation (${assessment.memberMatches?.length ?? 0})`} />
+            <Tab value="recommendation" label={assessment.status === 'pending' || assessment.status === 'running' ? 'Awaiting assessment' : `Recommendation (${assessment.memberMatches?.length ?? 0})`} />
             <Tab value="raw" label="AI Raw Data" />
           </Tabs>
 
@@ -552,7 +646,7 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 <Chip size="small" label={assessment.status} color={assessment.status === 'completed' ? 'success' : assessment.status === 'failed' ? 'error' : 'default'} />
                 {assessment.intent && <Chip size="small" label={assessment.intent} />}
-                {assessment.isReferralOpportunity !== undefined && <Chip size="small" label={assessment.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
+                {typeof assessment.isReferralOpportunity === 'boolean' && assessment.status === 'completed' && <Chip size="small" label={assessment.isReferralOpportunity ? 'Referral opportunity' : 'Not referral'} />}
                 {typeof assessment.confidence === 'number' && <Chip size="small" label={`AI confidence ${Math.round(assessment.confidence * 100)}%`} />}
                 {assessment.provider && <Chip size="small" label={assessment.provider} />}
                 {assessment.model && <Chip size="small" label={assessment.model} />}
@@ -578,10 +672,12 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
               <Box>
                 <Typography variant="overline" color="text.secondary">Original post</Typography>
                 <Typography sx={{ whiteSpace: 'pre-wrap' }}>{assessment.post?.latestCapturedText || 'No post text stored.'}</Typography>
-                {assessment.post?.canonicalPostUrl && (
-                  <Link href={assessment.post.canonicalPostUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
-                    {assessment.post.canonicalPostUrl}
-                  </Link>
+                {assessment.post && (
+                  <PostLinkActions
+                    post={assessment.post}
+                    stopPropagation
+                    onUpdated={(updated) => onPostUpdated?.(assessment.id, updated)}
+                  />
                 )}
                 <Typography color="text.secondary">
                   {assessment.post?.authorName ? `${assessment.post.authorName} · ` : ''}
@@ -644,8 +740,8 @@ function AssessmentDetailsDialog({ assessment, onClose }: { assessment?: AiAsses
               {rawTab === 'input' && (
                 <Stack spacing={2}>
                   <Box>
-                    <Typography variant="h6">Structured Input Payload</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 1 }}>Post and all active referral-member profiles sent to the model. Member matches must use exact IDs from this list.</Typography>
+                    <Typography variant="h6">{assessment.renderedPrompt ? 'Model input payload' : 'Queue metadata — not yet sent'}</Typography>
+                    <Typography color="text.secondary" sx={{ mb: 1 }}>{assessment.renderedPrompt ? 'The assembled post and active referral-member profiles for this model request. Member matches must use exact IDs from this list.' : 'This item has not reached the model request stage. The IDs and filter decision below describe queueing only; the full post and active member profiles are assembled when processing starts.'}</Typography>
                     {codePanel(assessment.inputPayload)}
                   </Box>
                 </Stack>

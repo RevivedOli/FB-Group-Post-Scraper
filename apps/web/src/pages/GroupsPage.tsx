@@ -13,12 +13,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { CollectorWorkerPanel } from '../components/CollectorWorkerPanel';
 import { apiGet, apiSend } from '../api/client';
 
 interface Group {
   id: string;
   friendlyName: string;
   canonicalGroupUrl: string;
+  facebookGroupId?: string | null;
   enabled: boolean;
   baselineStatus: string;
   baselineCompletedAt?: string | null;
@@ -81,6 +83,7 @@ function matchesSearch(group: Group, query: string) {
 }
 
 export function GroupsPage() {
+  const [numericIds, setNumericIds] = useState<Record<string,string>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [drafts, setDrafts] = useState<Record<string, LimitDraft>>({});
   const [search, setSearch] = useState('');
@@ -101,6 +104,8 @@ export function GroupsPage() {
 
   useEffect(() => {
     void load();
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const filteredGroups = useMemo(
@@ -180,12 +185,8 @@ export function GroupsPage() {
     setError(undefined);
     setMessage(undefined);
     try {
-      const result = await apiSend<Record<string, unknown>>(`/groups/${group.id}/${kind}`, 'POST');
-      setMessage(
-        kind === 'test'
-          ? `Test result: ${String(result.status)}`
-          : `Run result: ${String((result.run as { status?: string } | undefined)?.status ?? 'complete')} · posts ${String(result.postsInspected ?? 0)} · new ${String(result.newPostsSaved ?? 0)}`,
-      );
+      await apiSend('/collector/worker/start', 'POST', {mode:kind === 'test' ? 'test' : 'run',groupIds:[group.id]});
+      setMessage(`${kind === 'test' ? 'Access test' : 'Collection'} started for ${group.friendlyName}. Progress appears above.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -277,6 +278,7 @@ export function GroupsPage() {
         <Button variant="contained" onClick={openAdd}>Add Group</Button>
       </Stack>
 
+      <CollectorWorkerPanel />
       {message && <Alert severity="success" onClose={() => setMessage(undefined)}>{message}</Alert>}
       {error && <Alert severity="error" onClose={() => setError(undefined)}>{error}</Alert>}
 
@@ -332,31 +334,26 @@ export function GroupsPage() {
                   />
                 </Stack>
                 <Typography>{g.canonicalGroupUrl}</Typography>
+                {!/\/groups\/\d+\/?$/.test(g.canonicalGroupUrl) && <Stack direction="row" spacing={1}>
+                  <TextField size="small" label="Numeric Facebook group ID" value={numericIds[g.id] ?? g.facebookGroupId ?? ''} onChange={e=>setNumericIds({...numericIds,[g.id]:e.target.value})} />
+                  <Button onClick={()=>{const value=(numericIds[g.id] ?? g.facebookGroupId ?? '').trim();if(!/^\d+$/.test(value)){setError('Enter the numeric group ID, not its name.');return;}void apiSend(`/groups/${g.id}`,'PATCH',{facebookGroupId:value}).then(load).catch(err=>setError(String(err)));}}>Save ID</Button>
+                </Stack>}
+
                 <Typography color="text.secondary">
-                  Baseline: {g.baselineStatus}
+                  Historical browser baseline: {g.baselineStatus}
                   {g.baselineCompletedAt ? ` (${new Date(g.baselineCompletedAt).toLocaleString()})` : ''}
                   {' · '}Last test: {g.lastTestedAt ? new Date(g.lastTestedAt).toLocaleString() : 'Never'}
                   {' · '}Last run: {g.lastSuccessfulMonitorAt ? new Date(g.lastSuccessfulMonitorAt).toLocaleString() : 'Never'}
                 </Typography>
                 {g.lastErrorMessage && <Typography color="error">{g.lastErrorMessage}</Typography>}
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <TextField size="small" type="number" label="Max posts" value={draft.maxPostsPerRun} onChange={(e) => setLimit(g.id, 'maxPostsPerRun', e.target.value)} sx={{ width: 130 }} />
-                  <TextField size="small" type="number" label="Max scrolls" value={draft.maxScrollActions} onChange={(e) => setLimit(g.id, 'maxScrollActions', e.target.value)} sx={{ width: 130 }} />
-                  <TextField size="small" type="number" label="Max seconds" value={draft.maxGroupDurationSeconds} onChange={(e) => setLimit(g.id, 'maxGroupDurationSeconds', e.target.value)} sx={{ width: 140 }} />
-                  <Button disabled={Boolean(busy)} onClick={() => void saveLimits(g)}>
-                    {busy === `limits:${g.id}` ? 'Saving...' : 'Save Limits'}
-                  </Button>
-                </Stack>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button variant="outlined" disabled={Boolean(busy)} onClick={() => void action(g, 'test')}>
                     {busy === `test:${g.id}` ? 'Testing...' : 'Test Access'}
                   </Button>
                   <Button variant="contained" disabled={Boolean(busy) || !g.enabled} onClick={() => void action(g, 'run')}>
-                    {busy === `run:${g.id}` ? 'Running...' : isBaselineRun ? 'Run Baseline' : 'Run Group'}
+                    {busy === `run:${g.id}` ? 'Starting...' : 'Collect Group'}
                   </Button>
-                  <Button color="secondary" disabled={Boolean(busy)} onClick={() => void markRebaseline(g)}>
-                    {busy === `rebaseline:${g.id}` ? 'Marking...' : 'Rebaseline Next'}
-                  </Button>
+                  <Button disabled={Boolean(busy)} onClick={() => void apiSend(`/groups/${g.id}`, 'PATCH', {enabled:!g.enabled}).then(load).catch(err=>setError(String(err)))}>{g.enabled ? 'Disable Collection' : 'Enable Collection'}</Button>
                   <Button color="warning" disabled={Boolean(busy)} onClick={() => void clearData(g)}>
                     {busy === `clear:${g.id}` ? 'Clearing...' : 'Clear Data'}
                   </Button>

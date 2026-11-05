@@ -94,7 +94,7 @@ function resolveModelAndPricing(settings: AppSettings): { model: string; pricing
     }
     const curated = findCuratedModel('openai', ai.openaiModel);
     return {
-      model: ai.openaiModel || 'gpt-5.6-luna',
+      model: ai.openaiModel || 'gpt-6-luna',
       baseUrl: 'https://api.openai.com/v1',
       pricing: curated ?? ZERO_PRICING,
     };
@@ -259,7 +259,7 @@ export async function testProviderConnection(settings?: AppSettings) {
       body: JSON.stringify({
         model: provider.model,
         messages: [{ role: 'user', content: 'Reply with the single word ok.' }],
-        max_tokens: 5,
+        ...(provider.model === 'gpt-6-luna' ? {max_completion_tokens:32,reasoning_effort:'none'} : {max_tokens:5}),
       }),
     });
     if (!probe.ok) {
@@ -334,7 +334,8 @@ async function callOpenAiResponses(systemPrompt: string, userInput: string, prov
     signal: AbortSignal.timeout(Math.max(30, timeoutSeconds) * 1000),
     body: JSON.stringify({
       model: provider.model,
-      max_output_tokens: 900,
+      max_output_tokens: provider.model === 'gpt-6-luna' ? 2000 : 900,
+      ...(provider.model === 'gpt-6-luna' ? {reasoning:{effort:'none'}} : {}),
       text: {
         format: {
           type: 'json_schema',
@@ -358,6 +359,8 @@ async function callOpenAiResponses(systemPrompt: string, userInput: string, prov
     throw new Error(`OpenAI returned HTTP ${response.status}${errorBody ? `: ${truncateErrorBody(errorBody)}` : ''}.`);
   }
   const body = await response.json() as {
+    status?: string;
+    incomplete_details?: { reason?:string };
     output_text?: string;
     output?: Array<{ content?: Array<{ text?: string; type?: string }> }>;
     usage?: {
@@ -367,6 +370,7 @@ async function callOpenAiResponses(systemPrompt: string, userInput: string, prov
       input_tokens_details?: { cached_tokens?: number };
     };
   };
+  if (body.status === 'incomplete') throw new Error(`OpenAI response incomplete (${body.incomplete_details?.reason ?? 'unknown reason'}). No referral decision was saved.`);
   const textFromOutput = body.output
     ?.flatMap((item) => item.content ?? [])
     .map((part) => part.text ?? '')
@@ -401,7 +405,8 @@ async function callRemoteChatCompletions(
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userInput },
     ],
-    max_completion_tokens: 900,
+    max_completion_tokens: provider.model === 'gpt-6-luna' ? 2000 : 900,
+    ...(provider.provider === 'openai' && provider.model === 'gpt-6-luna' ? {reasoning_effort:'none'} : {}),
     response_format: useJsonSchema
       ? { type: 'json_schema', json_schema: assessmentJsonSchema }
       : { type: 'json_object' },

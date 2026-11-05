@@ -12,6 +12,28 @@ npm run dev
 
 Local application data defaults to `~/Library/Application Support/FacebookGroupMonitor` and can be overridden with `FB_MONITOR_DATA_DIR`.
 
+## Desktop app (macOS)
+
+Build and open a native window (starts the local API and loads the UI):
+
+```bash
+npm run desktop
+```
+
+Package a double-clickable Mac app into `release/mac-arm64/Local Group Monitor.app`:
+
+```bash
+npm run desktop:pack
+```
+
+To show it in Launchpad, copy the app into Applications:
+
+```bash
+cp -R "release/mac-arm64/Local Group Monitor.app" /Applications/
+```
+
+The packaged app is unsigned, so the first open may require right-click → Open (or System Settings → Privacy & Security). App icon assets live in `apps/desktop/build/`.
+
 ## Phase 2 Browser Session
 
 The Dashboard browser controls can open Facebook login, open Facebook home, check whether the current profile appears logged in, and close the managed browser. Profile data is stored locally at `~/Library/Application Support/FacebookGroupMonitor/browser-profile` by default.

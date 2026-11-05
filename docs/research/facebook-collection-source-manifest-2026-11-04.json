@@ -1,0 +1,123 @@
+{
+  "researched_on": "2026-11-04",
+  "method": "Read-only GitHub connector source inspection. No Facebook collection or repository code execution.",
+  "repositories": [
+    {
+      "repository": "0xEnc0der/fbcli",
+      "url": "https://github.com/0xEnc0der/fbcli",
+      "license": "MIT",
+      "head_sha": "863927514db22c4443e8d815530ab558c6df8c03",
+      "pushed_at": "2026-07-27T10:56:58Z",
+      "inspected_code_last_commit": {
+        "sha": "aaa61766d7a07b118c01c8699f655d000a57acaa",
+        "date": "2026-07-26T20:45:38Z",
+        "message": "Initial commit: fbcli — cookie-only Facebook CLI"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "XD-MHLOO/facebook-gql-scraper",
+      "url": "https://github.com/XD-MHLOO/facebook-gql-scraper",
+      "license": "MIT",
+      "head_sha": "3933a99a4eaac2e04754165b0ad7582b1ba452e9",
+      "pushed_at": "2026-11-03T13:40:44Z",
+      "inspected_code_last_commit": {
+        "sha": "3933a99a4eaac2e04754165b0ad7582b1ba452e9",
+        "date": "2026-11-03T13:39:38Z",
+        "message": "retrieve comments by Newest order as default behaviour"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "tamnd/facebook-cli",
+      "url": "https://github.com/tamnd/facebook-cli",
+      "license": "Apache-2.0",
+      "head_sha": "f50ef61d4d8444d7902f5c15791b097f49e72e5e",
+      "pushed_at": "2026-07-29T18:18:27Z",
+      "inspected_code_last_commit": {
+        "sha": "c78863a3acdd8516b381859628d50c438ebdaa26",
+        "date": "2026-07-29T11:38:14Z",
+        "message": "Read the Comet data plane instead of mbasic (#9)"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "FaustRen/facebook-graphql-scraper",
+      "url": "https://github.com/FaustRen/facebook-graphql-scraper",
+      "license": "MIT",
+      "head_sha": "6ad87844786da85ecf4c50b07a6ec8258e1b8048",
+      "pushed_at": "2026-08-18T06:58:32Z",
+      "inspected_code_last_commit": {
+        "sha": "36756af53c93b34f3da0872524e3a644505e385f",
+        "date": "2026-08-18T06:01:10Z",
+        "message": "feat: add Facebook profile picture extraction"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "mohdtalal3/facebook_post_comment_scraper",
+      "url": "https://github.com/mohdtalal3/facebook_post_comment_scraper",
+      "license": "MIT",
+      "head_sha": "0c33360a15c1df52712b8abeaa13d38e79cc7ba5",
+      "pushed_at": "2026-10-07T11:13:12Z",
+      "inspected_code_last_commit": {
+        "sha": "a41760ecc8f0b7fd6d64e7d8569985b8bdd89d79",
+        "date": "2026-10-05T19:01:32Z",
+        "message": "Add scrape job history and post URLs"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "kevinzg/facebook-scraper",
+      "url": "https://github.com/kevinzg/facebook-scraper",
+      "license": "MIT",
+      "head_sha": "567711fbab3e014504a1d4f33f882c2b29d71584",
+      "pushed_at": "2024-06-22T03:47:56Z",
+      "inspected_code_last_commit": {
+        "sha": "30a1f958cab850de6c2b06040523b4ddec26422c",
+        "date": "2023-02-17T05:28:49Z",
+        "message": "fix regex for searching next page in hashtag scraping (#972)"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "thanh2004nguyen/facebook-group-scraper",
+      "url": "https://github.com/thanh2004nguyen/facebook-group-scraper",
+      "license": "MIT",
+      "head_sha": "7d7cc96e203c12ca191375453ffdcf1b6ea68761",
+      "pushed_at": "2025-06-26T17:42:14Z",
+      "inspected_code_last_commit": {
+        "sha": "7d7cc96e203c12ca191375453ffdcf1b6ea68761",
+        "date": "2025-06-26T17:42:03Z",
+        "message": "Update: Safe URL template for GitHub upload"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "wael-sudo2/facebook-page-info-scraper",
+      "url": "https://github.com/wael-sudo2/facebook-page-info-scraper",
+      "license": "MIT",
+      "head_sha": "444024cf5cc7b9a031ff7e596cbf8db64edc9e5a",
+      "pushed_at": "2026-10-12T11:17:48Z",
+      "inspected_code_last_commit": {
+        "sha": "d831a155042e718f1001cb7972c8dbb653160798",
+        "date": "2026-10-12T11:16:21Z",
+        "message": "[FEATURE] Proxy support"
+      },
+      "live_tested": false
+    },
+    {
+      "repository": "csabapalfi/facebook-scrape-group",
+      "url": "https://github.com/csabapalfi/facebook-scrape-group",
+      "license": "No license detected in repository metadata",
+      "head_sha": "4cf31dfb1af1e810aa669c0a64ffb1ccd4ab2966",
+      "pushed_at": "2022-12-10T18:05:41Z",
+      "inspected_code_last_commit": {
+        "sha": "02ebee6a6df2ef74207b812fbac275a88968749a",
+        "date": "2020-01-30T23:47:09Z",
+        "message": "capture post date"
+      },
+      "live_tested": false
+    }
+  ]
+}

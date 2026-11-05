@@ -16,6 +16,14 @@ export interface PostRecord {
   monitoringStatus: string;
   extractionStrategy?: string | null;
   extractionConfidence?: number | null;
+  /** True when canonicalPostUrl is a real /groups/.../posts/{id} permalink. */
+  hasRealPermalink?: boolean;
+  /** Facebook group search URL built from a short post excerpt when permalink is missing. */
+  searchPostUrl?: string | null;
+  /** Prefer real permalink; otherwise the generated search URL (or stored fallback). */
+  openPostUrl?: string;
+  /** Excerpt used for the Facebook group search query. */
+  searchExcerpt?: string | null;
   aiAssessments?: PostAiAssessmentRecord[];
 }
 

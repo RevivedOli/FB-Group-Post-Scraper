@@ -1,0 +1,626 @@
+{
+  "summary": {
+    "model": "gpt-6-luna",
+    "reasoning": "none",
+    "examples": 20,
+    "successful": 20,
+    "intentAgreements": 19,
+    "memberAgreements": 18,
+    "estimatedCostUsd": 0.01393691,
+    "notes": "Agreement with historical GPT-5.6 Luna decisions, not independently labelled accuracy. Original saved model inputs are reused. No live assessments, match decisions or notifications are changed."
+  },
+  "rows": [
+    {
+      "postId": "collector-post-2773944175969705-29389961613941266",
+      "baselineAssessmentId": "cmw2nwdjq000hzx4v4ic4ogi1",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqt000gzxiq6nagdsea"
+      ],
+      "targetMembers": [
+        "cmsfzirqt000gzxiq6nagdsea"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7939,
+        "cachedInputTokens": 0,
+        "outputTokens": 134,
+        "totalTokens": 8073,
+        "durationMs": 4634,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0008609000000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author urgently needs a boiler service in Lightwater and is looking for a boiler engineer with availability soon.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqt000gzxiq6nagdsea",
+            "scorePercent": "100%",
+            "reason": "The author needs a boiler service, which the member explicitly provides as part of their domestic boiler servicing service.",
+            "suggestedIntro": "The author is looking for an urgent boiler service in Lightwater. I’d like to introduce Jon Bennett, who provides domestic boiler servicing."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsx32v5r017czxdd56fxjb5a",
+      "baselineAssessmentId": "cmsx32v7q017kzxddajod0cd1",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "targetMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7964,
+        "cachedInputTokens": 1719,
+        "outputTokens": 125,
+        "totalTokens": 8089,
+        "durationMs": 2132,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.00070419
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author wants recommendations for companies that replace and install new garage doors.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqx000lzxiqosev9zw9",
+            "scorePercent": "75%",
+            "reason": "The author needs garage door replacement and installation, which directly fits the member's stated supply-and-install services for residential doors.",
+            "suggestedIntro": "Darren, Lydia supplies and installs residential doors and may be able to help with your new garage doors."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsx3136r015ozxddg9las1c0",
+      "baselineAssessmentId": "cmsx3138v015szxddq820hp9g",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqc0003zxiq4xou1l1j"
+      ],
+      "targetMembers": [],
+      "membersAgree": false,
+      "usage": {
+        "inputTokens": 7893,
+        "cachedInputTokens": 1719,
+        "outputTokens": 54,
+        "totalTokens": 7947,
+        "durationMs": 2878,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006615900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author wants recommendations for unique experiences or activities to enjoy in London with friends and two children.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "cmsx21i7000dtzxddgqce5q1o",
+      "baselineAssessmentId": "cmsx21iad00e9zxddw67ne7w6",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirr0000szxiqye7kfjlf"
+      ],
+      "targetMembers": [
+        "cmsfzirr0000szxiqye7kfjlf"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7899,
+        "cachedInputTokens": 1719,
+        "outputTokens": 140,
+        "totalTokens": 8039,
+        "durationMs": 2216,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0007051900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author wants a reasonably priced, professional roofer to replace the roof on their pergola.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirr0000szxiqye7kfjlf",
+            "scorePercent": "75%",
+            "reason": "The author needs a roof replaced, and the member explicitly provides domestic roofing services; the profile does not specify pergola roofing in particular.",
+            "suggestedIntro": "Someone in the group is looking for a reasonably priced, professional roofer to replace a pergola roof. Ross provides domestic roofing services."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsu9kfng01z82p9tw5x2xzcv",
+      "baselineAssessmentId": "cmsu9kfph01za2p9t1lqeya15",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "targetMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7957,
+        "cachedInputTokens": 1719,
+        "outputTokens": 167,
+        "totalTokens": 8124,
+        "durationMs": 2570,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0007244900000000002
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author needs a bricklayer or builder to construct a two-brick-high porch base and form a solid floor inside it.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqw000jzxiqow4g4pt5",
+            "scorePercent": "75%",
+            "reason": "The author needs building and construction work for a porch base, which fits the member's stated general building and construction services; the profile notes that small handyman jobs are not their focus, so this specific small project is a partial match.",
+            "suggestedIntro": "Leon, Melissa is looking for a builder to construct a base for a new front porch. Your general building and construction services may be relevant."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsu8poe701bx2p9tm7l1bm13",
+      "baselineAssessmentId": "cmsu8poeo01c12p9tmacwdgpo",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "targetMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7885,
+        "cachedInputTokens": 1719,
+        "outputTokens": 130,
+        "totalTokens": 8015,
+        "durationMs": 2233,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.00069879
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author wants recommendations for companies that replace and install new garage doors.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqx000lzxiqosev9zw9",
+            "scorePercent": "90%",
+            "reason": "The author needs a company to replace and install garage doors, and the member explicitly provides residential door supply and supply-and-install services.",
+            "suggestedIntro": "Darren is looking for a company to replace and install a new garage door. Lydia provides residential door supply and installation."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsu8agkq00x82p9t1llr1n1b",
+      "baselineAssessmentId": "cmsu8agmr00xe2p9tezazw0jx",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "advertising",
+      "intentAgrees": false,
+      "baselineMembers": [
+        "cmsfzirqe0005zxiqmg7uh4e1"
+      ],
+      "targetMembers": [],
+      "membersAgree": false,
+      "usage": {
+        "inputTokens": 7989,
+        "cachedInputTokens": 1719,
+        "outputTokens": 63,
+        "totalTokens": 8052,
+        "durationMs": 2249,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006756900000000001
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.82,
+        "summary": "KAB Technologies appears to be promoting a technology partner offering more than internet, but the post is truncated and provides no specific request or service details.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "cmsu7rdhi00i82p9t5fvp5zob",
+      "baselineAssessmentId": "cmsu7rdjq00ia2p9tfaamv9bt",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "targetMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7939,
+        "cachedInputTokens": 1719,
+        "outputTokens": 139,
+        "totalTokens": 8078,
+        "durationMs": 2354,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0007086900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author needs a builder to construct a two-brick-high porch base and form a solid floor inside it.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqw000jzxiqow4g4pt5",
+            "scorePercent": "90%",
+            "reason": "The author needs general building and construction work to prepare a porch base, which directly matches the member's general building service.",
+            "suggestedIntro": "Leon, someone is looking for a builder to prepare a two-brick-high base and solid floor for a new front porch."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsu7dsr6006g2p9t3ain0481",
+      "baselineAssessmentId": "cmsu7dst3006k2p9tse22lwmk",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "targetMembers": [
+        "cmsfzirqw000jzxiqow4g4pt5"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7939,
+        "cachedInputTokens": 1719,
+        "outputTokens": 144,
+        "totalTokens": 8083,
+        "durationMs": 2222,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0007111900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author needs a bricklayer or builder to construct a two-brick-high porch base and solid floor, ready for a porch installation.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqw000jzxiqow4g4pt5",
+            "scorePercent": "100%",
+            "reason": "The author needs building and construction work to prepare a porch base, which directly matches the member's general building and construction services.",
+            "suggestedIntro": "Leon, someone is looking for a builder to prepare a two-brick-high base and solid floor for a new porch."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "cmsu7aex2001y2p9tsqe45df1",
+      "baselineAssessmentId": "cmsu7aexa00222p9tvli06v81",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "targetMembers": [
+        "cmsfzirqx000lzxiqosev9zw9"
+      ],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7913,
+        "cachedInputTokens": 1719,
+        "outputTokens": 153,
+        "totalTokens": 8066,
+        "durationMs": 2433,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0007130900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": true,
+        "confidence": 0.99,
+        "summary": "The author is seeking quotes to replace a slanted conservatory's glass roof with a closed roof and a roof lantern.",
+        "recommendedMembers": [
+          {
+            "memberId": "cmsfzirqx000lzxiqosev9zw9",
+            "scorePercent": "90%",
+            "reason": "The author needs a conservatory glass-roof replacement and roof lantern, which directly matches the member's stated supply or installation of glass roofs and glazing.",
+            "suggestedIntro": "Kerrin is looking for quotes to replace a slanted conservatory glass roof with a closed roof and roof lantern. Lydia supplies and installs glass roofs and glazing."
+          }
+        ]
+      }
+    },
+    {
+      "postId": "collector-post-2773944175969705-29392052977065463",
+      "baselineAssessmentId": "cmw2nwdij0009zx4vesauruem",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7991,
+        "cachedInputTokens": 1719,
+        "outputTokens": 46,
+        "totalTokens": 8037,
+        "durationMs": 2692,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006673900000000001
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "Amigo Driving School is promoting automatic and manual driving lessons.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-2773944175969705-29412881371649290",
+      "baselineAssessmentId": "cmw2nvvej0003zx4ve9f5cgxe",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 8155,
+        "cachedInputTokens": 1719,
+        "outputTokens": 60,
+        "totalTokens": 8215,
+        "durationMs": 1456,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.00069079
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author is promoting a December personal-training kickstart package at GRIT13, offering four sessions and fitness guidance for £160.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-2773944175969705-29375321362071958",
+      "baselineAssessmentId": "cmw2mlbhl000rzxruluefii0t",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 8095,
+        "cachedInputTokens": 1719,
+        "outputTokens": 70,
+        "totalTokens": 8165,
+        "durationMs": 2035,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006897900000000001
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author is promoting her new home-helper business and inviting local people who may want help with household tasks, cleaning, ironing, companionship, shopping, errands or appointments to contact her.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-1124336946328584-1350678323694444",
+      "baselineAssessmentId": "cmw2mkdsv000nzxru41uzt1kc",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7888,
+        "cachedInputTokens": 1719,
+        "outputTokens": 52,
+        "totalTokens": 7940,
+        "durationMs": 1574,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006600900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author wants an affordable mobile hairdresser or home salon in or around Ascot.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-953445578010079-29629482493313005",
+      "baselineAssessmentId": "cmw2mhlf3000bzxruc66ipun8",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7909,
+        "cachedInputTokens": 1719,
+        "outputTokens": 55,
+        "totalTokens": 7964,
+        "durationMs": 1578,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006636900000000001
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author wants a specialist in correcting uneven lips after lip filler and asks for examples of their work.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-953445578010079-29618121167782471",
+      "baselineAssessmentId": "cmw2mhleu0007zxru4mt5oga2",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7892,
+        "cachedInputTokens": 1719,
+        "outputTokens": 59,
+        "totalTokens": 7951,
+        "durationMs": 1525,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006639900000000002
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author is looking for a school willing to host a Year 11 student for work experience at the end of November.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-953445578010079-29608385275422727",
+      "baselineAssessmentId": "cmw2mhlen0005zxrunp7msflh",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 8036,
+        "cachedInputTokens": 1719,
+        "outputTokens": 56,
+        "totalTokens": 8092,
+        "durationMs": 1931,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006768900000000001
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author is advertising available dog-walking spaces and pop-in visits in Sunningdale and Sunninghill.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-953445578010079-29602187479375840",
+      "baselineAssessmentId": "cmw2mhlea0003zxru3mv6jhyy",
+      "baselineIntent": "looking_for_help",
+      "targetIntent": "looking_for_help",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 7969,
+        "cachedInputTokens": 1719,
+        "outputTokens": 63,
+        "totalTokens": 8032,
+        "durationMs": 1682,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.00067369
+      },
+      "target": {
+        "intent": "looking_for_help",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The author is seeking donated dog coats or jumpers for a Romanian rescue shelter and offers to collect them or accept drop-offs in Ascot.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-2773944175969705-29413905624880198",
+      "baselineAssessmentId": "cmw2m2ask0029zxry9uyscy4w",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 8245,
+        "cachedInputTokens": 1719,
+        "outputTokens": 55,
+        "totalTokens": 8300,
+        "durationMs": 1721,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.00069729
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "Lisa is promoting affordable live online daytime tuition for children from Key Stage 1 to Key Stage 4.",
+        "recommendedMembers": []
+      }
+    },
+    {
+      "postId": "collector-post-2773944175969705-29413752864895474",
+      "baselineAssessmentId": "cmw2m2arv0023zxrydlgoyatb",
+      "baselineIntent": "advertising",
+      "targetIntent": "advertising",
+      "intentAgrees": true,
+      "baselineMembers": [],
+      "targetMembers": [],
+      "membersAgree": true,
+      "usage": {
+        "inputTokens": 8137,
+        "cachedInputTokens": 1719,
+        "outputTokens": 61,
+        "totalTokens": 8198,
+        "durationMs": 1898,
+        "requestCount": 1,
+        "estimatedCostUsd": 0.0006894900000000002
+      },
+      "target": {
+        "intent": "advertising",
+        "isReferralOpportunity": false,
+        "confidence": 0.99,
+        "summary": "The post promotes Inside Out Ascot’s monthly longevity and wellness membership, including hyperbaric oxygen, red light and PEMF sessions.",
+        "recommendedMembers": []
+      }
+    }
+  ]
+}

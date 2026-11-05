@@ -1,0 +1,8 @@
+# Credentials are managed by account login, never placed here.
+max_posts = 100
+max_pages = 20
+overlap_hours = 24
+max_requests = 100
+request_delay_seconds = 2
+page_delay_seconds = 10
+deadline_seconds = 600

@@ -1,3 +1,4 @@
+import {VisitorsPage} from './pages/VisitorsPage';
 import { useState } from 'react';
 import { Layout } from './components/Layout';
 import { DashboardPage } from './pages/DashboardPage';
@@ -9,8 +10,8 @@ import { AiQueuePage } from './pages/AiQueuePage';
 import { AiUsagePage } from './pages/AiUsagePage';
 
 export default function App() {
-  const [page, setPage] = useState('Dashboard');
-  const body = page === 'Posts'
+  const [page, setPage] = useState('Posts');
+  const body = page === 'Visitor Opportunities' ? <VisitorsPage /> : page === 'Posts'
     ? <PostsPage />
     : page === 'Groups'
       ? <GroupsPage />
