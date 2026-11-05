@@ -8,11 +8,22 @@ import { normalizePacing, type CollectorPacing } from './collector-pacing.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 let child:ChildProcess|undefined;
 let starting = false;
+let stopTimer:ReturnType<typeof setTimeout>|undefined;
 type Event = { type:string; ui_id?:string; name?:string; status?:string; message?:string; reason?:string; account_id?:string; facebook_profile_id?:string; result?:Record<string,unknown>; at:string };
 let job = { state:'idle', mode:'test', currentGroup:null as string|null, accountId:null as string|null, profileId:null as string|null, total:0, completed:0, events:[] as Event[], startedAt:null as string|null, finishedAt:null as string|null };
 export function collectorWorkerStatus() { return {...job,events:[...job.events]}; }
 function event(value:Omit<Event,'at'>) { job.events.unshift({...value,at:new Date().toISOString()}); job.events = job.events.slice(0,100); }
-export function stopCollectorWorker() { if (child) { job.state='stopping'; child.kill('SIGINT'); } return collectorWorkerStatus(); }
+export function stopCollectorWorker() {
+  if (child && job.state!=='stopping') {
+    const stoppingChild=child;
+    job.state='stopping';
+    stoppingChild.kill('SIGINT');
+    // Bound cancellation even if Python is blocked in an upstream request or cleanup.
+    stopTimer=setTimeout(()=>{if(child===stoppingChild)stoppingChild.kill('SIGKILL');},5000);
+    stopTimer.unref();
+  }
+  return collectorWorkerStatus();
+}
 export async function startCollectorWorker(input:Partial<CollectorPacing>&{mode?:unknown;groupIds?:unknown;maxAgeHours?:unknown;maxPages?:unknown;limit?:unknown}) {
   if (child || starting) throw new Error('A collector cycle is already running. Stop it or wait for completion.');
   starting = true;
@@ -56,7 +67,9 @@ export async function startCollectorWorker(input:Partial<CollectorPacing>&{mode?
     });
     processChild.stderr?.on('data',()=>{}); // Never expose upstream stderr or credentials.
     processChild.once('error',()=>{ event({type:'stopped',reason:'worker_start_failed',message:'Check the collector virtualenv/Python path.'}); job.state='failed'; });
-    processChild.once('close',code=>{ void updates.finally(()=>{
+    processChild.once('close',code=>{
+      if(stopTimer){clearTimeout(stopTimer);stopTimer=undefined;}
+      void updates.finally(()=>{
       if (job.state==='running') job.state=code===0 ? 'completed' : 'failed';
       if (job.state==='stopping') job.state='cancelled';
       job.currentGroup=null;job.finishedAt=new Date().toISOString();child=undefined;

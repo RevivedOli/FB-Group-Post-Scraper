@@ -28,6 +28,24 @@ describe('sequential collector worker control',()=>{
     await startCollectorWorker({mode:'run'});stopCollectorWorker();expect(child.kill).toHaveBeenCalledWith('SIGINT');child.emit('close',130);await flush();
     expect(collectorWorkerStatus().state).toBe('cancelled');
   });
+  it('forces a stuck worker to exit and permits a fresh cycle',async()=>{
+    vi.useFakeTimers();
+    try {
+      await startCollectorWorker({mode:'run'});
+      stopCollectorWorker();stopCollectorWorker();
+      expect(child.kill).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+      child.emit('close',null);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(collectorWorkerStatus().state).toBe('cancelled');
+      child=Object.assign(new EventEmitter(),{stdout:new PassThrough(),stderr:new PassThrough(),stdin:new PassThrough(),kill:vi.fn()});
+      mocks.spawn.mockReturnValue(child);
+      await startCollectorWorker({mode:'test'});
+      child.emit('close',0);
+      await vi.advanceTimersByTimeAsync(0);
+    } finally {vi.useRealTimers();}
+  });
   it('validates limits before starting a process',async()=>{
     await expect(startCollectorWorker({mode:'run',maxPages:999})).rejects.toThrow('Invalid');expect(mocks.spawn).not.toHaveBeenCalled();
   });

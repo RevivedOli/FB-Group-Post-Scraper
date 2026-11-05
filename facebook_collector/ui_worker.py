@@ -71,6 +71,9 @@ def cycle(db, spec, factory=None, output=emit, pause=time.sleep):
                 output({'type':'group_result', **identity, 'group_id':gid, 'status':status, 'result':result})
             except CollectorError as error:
                 output({'type':'group_result', **identity, 'status':error.code, 'message':str(error)})
+                if error.code == 'interrupted':
+                    output({'type':'stopped', 'reason':'cancelled'})
+                    return
                 if error.code in ('restricted','authentication_required','authentication_unverified'):
                     output({'type':'stopped', 'reason':error.code})
                     return

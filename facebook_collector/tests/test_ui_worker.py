@@ -64,3 +64,14 @@ class WorkerTests(unittest.TestCase):
         results=[e['result'] for e in events if e['type']=='group_result']
         self.assertEqual([r['new_posts'] for r in results],[1,0]);self.assertNotIn('new_records',results[0])
         self.assertNotIn('Recommend an electrician',str(events))
+
+
+    def test_scan_interrupt_cancels_entire_cycle_before_next_group(self):
+        events=[];pause=Mock()
+        factory=Mock(side_effect=KeyboardInterrupt())
+        cycle(self.db,{'mode':'run','pacing':{'shuffleGroups':False},'account':self.aid,'groups':self.groups},factory,events.append,pause)
+        self.assertEqual(factory.call_count,1)
+        pause.assert_not_called()
+        self.assertEqual(events[-1],{'type':'stopped','reason':'cancelled'})
+        self.assertEqual(len([e for e in events if e['type']=='group_started']),1)
+        self.assertFalse(any(e['type']=='completed' for e in events))
