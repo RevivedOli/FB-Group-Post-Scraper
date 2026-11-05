@@ -1,3 +1,4 @@
+import {reviewMemberMatch,summarizeMemberFeedback} from './member-feedback.service.js';
 import { withPostLinkFields } from '@local-group-monitor/shared';
 import { prisma } from '../db/prisma.js';
 import { pickPreferredAiMemberMatch } from './ai-assessment.service.js';
@@ -472,17 +473,8 @@ export async function listMemberAiMatches(
   return { member, items, total };
 }
 
-export async function updateAiMemberMatchStatus(id: string, input: { status: string; note?: string }) {
-  if (!allowedAiMatchStatuses.has(input.status)) throw new Error(`Invalid AI match status: ${input.status}`);
-  const now = new Date();
-  return prisma.aiMemberMatch.update({
-    where: { id },
-    data: {
-      status: input.status,
-      note: input.note,
-      copiedAt: input.status === 'copied' ? now : undefined,
-      introducedAt: input.status === 'introduced' ? now : undefined,
-      dismissedAt: ['dismissed', 'not_relevant'].includes(input.status) ? now : undefined,
-    },
-  });
+export async function updateAiMemberMatchStatus(id: string, input: unknown) {
+  const result=await reviewMemberMatch(id, input);
+  if(result.feedback)result.feedback=await summarizeMemberFeedback(result.feedback.memberId,result.feedback.id);
+  return result;
 }

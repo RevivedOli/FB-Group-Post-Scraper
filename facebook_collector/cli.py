@@ -59,6 +59,7 @@ def parser():
             age = s.add_mutually_exclusive_group()
             age.add_argument('--max-age-hours', type=float, help='Keep only posts published within this many hours.')
             age.add_argument('--max-age-days', type=float, help='Keep only posts published within this many days.')
+            s.add_argument('--stop-after-known', type=int, default=10, help='Stop after this many consecutive distinct saved, unchanged posts; 0 disables (default 10). Ranked feeds may hide older unseen posts.')
             s.add_argument('--stop-at-cutoff', action='store_true', help='Stop at the first old post; may miss newer posts in a ranked feed. Coverage stays partial.')
     scans = subs.add_parser('scans').add_subparsers(dest='action', required=True)
     scans.add_parser('list')
@@ -177,6 +178,7 @@ def main(argv=None):
                     options['limit'] = 20
                 options['max_age_hours'] = args.max_age_hours if args.max_age_days is None else args.max_age_days * 24
                 options['stop_at_cutoff'] = args.stop_at_cutoff
+                options['stop_after_known'] = args.stop_after_known
                 if args.sort:
                     from facebook_collector.collectors.pagination import ensure_sorting
                     ensure_sorting(db, args.group, args.account, args.sort)

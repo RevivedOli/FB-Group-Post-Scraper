@@ -61,13 +61,15 @@ class App:
                 collector.close()
 
     def scan(self, gid, account=None, limit=100, max_pages=20, overlap_hours=24,
-             max_age_hours=None, stop_at_cutoff=False):
+             max_age_hours=None, stop_at_cutoff=False, stop_after_known=10):
         if limit < 1 or max_pages < 1 or overlap_hours < 0:
             fail('invalid_options', 'Limits must be positive; overlap cannot be negative.')
         if max_age_hours is not None and (not math.isfinite(max_age_hours) or max_age_hours <= 0):
             fail('invalid_options', 'Maximum age must be a finite positive number.')
         if stop_at_cutoff and max_age_hours is None:
             fail('invalid_options', '--stop-at-cutoff requires --max-age-hours or --max-age-days.')
+        if not isinstance(stop_after_known, int) or isinstance(stop_after_known, bool) or stop_after_known < 0:
+            fail('invalid_options', 'Known-post stop count must be a nonnegative integer (0 disables it).')
         group = self.groups.get(gid)
         aid = self.groups.select_account(group, account)
         started, run = now(), uuid.uuid4().hex
@@ -94,10 +96,12 @@ class App:
                       'skipped_old': 0, 'skipped_missing_timestamp': 0,
                       'cutoff_at': cutoff.isoformat(timespec='microseconds') if cutoff else None,
                       'max_age_hours': max_age_hours, 'stop_at_cutoff': stop_at_cutoff,
+                      'stop_after_known': stop_after_known, 'consecutive_known': 0,
                       'reached_overlap': False, 'chronological_verified': False, 'stop_reason': None}
             collector, emitted, seen, times = None, [], {}, []
             missing_time, exhausted, truncated, unsupported_continuation = False, False, False, False
             cutoff_reached = False
+            known_reached, consecutive_known, streak_seen = False, 0, set()
             try:
                 collector = self.factory(self.db, aid, group['id'])
                 for page in collector.pages(group['id']):
@@ -112,11 +116,23 @@ class App:
                     page_old, page_missing, processed_records = 0, 0, []
                     with self.db.conn:
                         for post in records:
+                            if known_reached:
+                                break
                             # Adapter invariant: only stable identities for the assigned group.
                             if post.get('group_id') != group['id'] or not str(post.get('post_id', '')).isdigit():
                                 fail('unstable_identity', 'Collector returned a missing or mismatched source identity.')
                             pid = post['post_id']
                             processed_records.append(post)
+                            # Only distinct, unchanged posts saved before this run advance the streak.
+                            # Repeated pagination entries cannot manufacture an overlap signal.
+                            if pid not in streak_seen:
+                                streak_seen.add(pid)
+                                prior = self.db.one('SELECT text,first_scan_id FROM posts WHERE group_id=? AND post_id=?', (group['id'], pid))
+                                known = prior is not None and prior['first_scan_id'] != run and has_text(prior['text']) and prior['text'] == post.get('text')
+                                consecutive_known = consecutive_known + 1 if known else 0
+                                if stop_after_known and consecutive_known >= stop_after_known:
+                                    known_reached = True
+
                             if cutoff is not None:
                                 published_value = post.get('published_at')
                                 if not published_value:
@@ -180,7 +196,8 @@ class App:
                                 missing_time = True
                     self.db.execute('UPDATE scan_runs SET posts_fetched=?,new_posts=?,duplicates=?,pages=? WHERE id=?',
                                     (result['posts_fetched'], result['new_posts'], result['duplicates'], result['pages'], run))
-                    if cutoff_reached:
+                    result['consecutive_known'] = consecutive_known
+                    if cutoff_reached or known_reached:
                         break
                     if page.has_next is False and not truncated:
                         exhausted = True
@@ -198,7 +215,7 @@ class App:
                               chronological_verified=ordered_sample and getattr(collector, 'feed_sorting', None) == 'CHRONOLOGICAL',
                               observed_order_descending=ordered_sample,
                               feed_sorting=getattr(collector, 'feed_sorting', None),
-                              stop_reason='age_cutoff' if cutoff_reached else ('feed_end' if exhausted else ('pagination_unavailable' if unsupported_continuation else 'scan_limit')))
+                              stop_reason='known_post_streak' if known_reached else ('age_cutoff' if cutoff_reached else ('feed_end' if exhausted else ('pagination_unavailable' if unsupported_continuation else 'scan_limit'))))
                 # Save legitimately updated cookies before marking coverage successful.
                 collector.close()
                 collector = None
@@ -229,7 +246,7 @@ class App:
               (stamp, status, result['posts_fetched'], result['new_posts'], result['duplicates'], result['pages'],
                result['scan_completed'], result['coverage_complete'], result['chronological_verified'], result['reached_overlap'],
                result['stop_reason'], error.code if error else None, str(error) if error else None,
-               json.dumps({key: result[key] for key in ('max_age_hours','cutoff_at','stop_at_cutoff','skipped_no_text','skipped_old','skipped_missing_timestamp')}), run))
+               json.dumps({key: result[key] for key in ('max_age_hours','cutoff_at','stop_at_cutoff','skipped_no_text','skipped_old','skipped_missing_timestamp','stop_after_known','consecutive_known')}), run))
             self.db.conn.execute('''INSERT INTO checkpoints(group_id,latest_publication,last_post_id,recently_seen_ids,last_scan_completed,last_run_id)
               VALUES(?,?,?,?,?,?) ON CONFLICT(group_id) DO UPDATE SET
               latest_publication=CASE WHEN excluded.latest_publication > COALESCE(checkpoints.latest_publication,'')

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   settings:vi.fn(), provider:vi.fn(),
-  db:{ post:{findUnique:vi.fn(),update:vi.fn()}, postAiAssessment:{findFirst:vi.fn(),create:vi.fn(),updateMany:vi.fn()}, referralMember:{findMany:vi.fn()} },
+  db:{ setting:{findMany:vi.fn()}, post:{findUnique:vi.fn(),update:vi.fn()}, postAiAssessment:{findFirst:vi.fn(),create:vi.fn(),updateMany:vi.fn()}, referralMember:{findMany:vi.fn()} },
 }));
 vi.mock('../../src/db/prisma.js',()=>({prisma:mocks.db}));
 vi.mock('../../src/services/settings.service.js',async original=>({ ...await original<typeof import('../../src/services/settings.service.js')>(), getSettings:mocks.settings }));
@@ -11,6 +11,7 @@ import { defaultSettings, normalizeSettings } from '../../src/services/settings.
 const post = {id:'collector-post-123-456',groupId:'g1',facebookPostId:'456',canonicalPostUrl:'https://www.facebook.com/groups/123/posts/456',extractionStrategy:'facebook_gql',extractionConfidence:0,latestCapturedText:'Can anyone recommend a reliable local plumber?',group:{friendlyName:'Example',canonicalGroupUrl:'https://www.facebook.com/groups/123'}};
 beforeEach(()=>{
   vi.clearAllMocks();
+  mocks.db.setting.findMany.mockResolvedValue([]);
   mocks.settings.mockResolvedValue(normalizeSettings({ai:{...defaultSettings.ai,prefilterEnabled:true,prefilterPhrases:'looking for\ncan anyone',minExtractionConfidence:0.9}}));
   mocks.db.post.findUnique.mockResolvedValue(post);
   mocks.db.postAiAssessment.findFirst.mockResolvedValue(null);
@@ -33,6 +34,16 @@ describe('collector relevance queue',()=>{
     expect(built.inputPayload.post.text).toBe(post.latestCapturedText);
     expect(built.inputPayload.referralMembers[0]).toMatchObject(member);
     expect(built.userInput).toContain('Domestic boiler servicing');
+  });
+  it('includes active human corrections in the actual model payload without replacing services',()=>{
+    const feedback={id:'f1',memberId:'m1',reason:'Kitchen installation does not include furniture transport.',postText:'Can someone deliver a desk?',modelReason:'Works with homes',active:true,createdAt:'2026-11-05T10:00:00Z'};
+    const member={id:'m1',name:'Kitchen specialist',servicesOffered:'Kitchen design and installation',reviewerFeedback:[feedback,{...feedback,id:'f2',reason:'Disabled old rule',active:false}]};
+    const built=buildAssessmentPrompt(post as never,[member] as never,'Assess relevance');
+    expect(built.inputPayload.referralMembers[0].servicesOffered).toBe('Kitchen design and installation');
+    expect(built.inputPayload.referralMembers[0].reviewerFeedback).toHaveLength(1);
+    expect(built.userInput).toContain('Kitchen installation does not include furniture transport.');
+    expect(built.userInput).not.toContain('Disabled old rule');
+    expect(built.prompt).toContain('Do not turn a specific correction into a blanket exclusion');
   });
   it('persists the matched phrase and queues eligible structured posts',async()=>{
     const result=await queuePostForAi(post.id,{process:false});

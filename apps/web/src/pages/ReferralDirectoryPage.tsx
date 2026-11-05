@@ -1,3 +1,4 @@
+import {DismissReferralDialog,MemberFeedbackPanel} from '../components/MemberFeedback';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import type { ReferralDirectoryResponse } from '@local-group-monitor/shared';
 import {
@@ -50,6 +51,7 @@ interface ReferralMember {
 
 interface MemberAiMatch {
   id: string;
+  note?: string | null;
   score: number;
   scorePercent: string;
   reason?: string | null;
@@ -122,6 +124,8 @@ function HelpTip({ title }: { title: string }) {
 }
 
 export function ReferralDirectoryPage() {
+  const [dismissMatch,setDismissMatch]=useState<MemberAiMatch>();
+  const [feedbackRefresh,setFeedbackRefresh]=useState(0);
   const [members, setMembers] = useState<ReferralMember[]>([]);
   const [counts, setCounts] = useState<ReferralDirectoryResponse['matchCounts']>();
   const [draft, setDraft] = useState(emptyDraft);
@@ -372,6 +376,7 @@ export function ReferralDirectoryPage() {
   }, [memberStatus, memberMinScore]);
 
   async function updateAiMatch(match: MemberAiMatch, status: string) {
+    if(status==='dismissed'){setDismissMatch(match);return;}
     setBusy(match.id);
     setError(undefined);
     try {
@@ -591,8 +596,10 @@ export function ReferralDirectoryPage() {
             <Tabs value={memberTab} onChange={(_, value) => setMemberTab(value)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <Tab value="matches" label={`Linked Matches (${memberMatchTotal})`} />
               <Tab value="profile" label="Member Profile" />
+              <Tab value="feedback" label="Matching corrections" />
             </Tabs>
 
+            {memberTab==='feedback'&&selectedMember&&<MemberFeedbackPanel memberId={selectedMember.id} refreshKey={feedbackRefresh}/>}
             {memberTab === 'profile' && (
               <Card variant="outlined">
                 <CardContent>
@@ -667,6 +674,7 @@ export function ReferralDirectoryPage() {
                           {' · '}First collected: {new Date(match.assessment.post.firstDiscoveredAt).toLocaleString('en-GB')}
                         </Typography>
                         <Typography>{match.assessment.post.latestCapturedText || match.assessment.summary || 'No post text.'}</Typography>
+                        {match.note&&<Alert severity="info">Your review note: {match.note}</Alert>}
                         {match.reason && <Typography color="text.secondary">{match.reason}</Typography>}
                         {match.suggestedIntro && <Alert severity="info">{match.suggestedIntro}</Alert>}
                         <PostLinkActions
@@ -709,6 +717,7 @@ export function ReferralDirectoryPage() {
           </Stack>
         </DialogContent>
       </Dialog>
+      {dismissMatch&&selectedMember&&<DismissReferralDialog key={dismissMatch.id} matchId={dismissMatch.id} memberName={selectedMember.name} postText={dismissMatch.assessment.post.latestCapturedText??dismissMatch.assessment.summary??''} modelReason={dismissMatch.reason} onClose={()=>setDismissMatch(undefined)} onSaved={async(learn)=>{setDismissMatch(undefined);setFeedbackRefresh(value=>value+1);setMessage(learn?'Match dismissed and correction saved for future AI checks.':'Match dismissed without adding a matching correction.');await loadMemberMatches();await loadDirectory();}}/>}
     </Stack>
   );
 }

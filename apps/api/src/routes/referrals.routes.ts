@@ -1,3 +1,5 @@
+import {listMemberFeedback,setMemberFeedbackActive,summarizeMemberFeedback} from '../services/member-feedback.service.js';
+import {localControl} from './local-control.js';
 import { Router } from 'express';
 import {
   applyReferralCsvImport,
@@ -116,10 +118,15 @@ referralsRouter.get('/:id/ai-matches', async (req, res, next) => {
   }
 });
 
-referralsRouter.patch('/ai-matches/:id', async (req, res, next) => {
+referralsRouter.patch('/ai-matches/:id', localControl, async (req, res, next) => {
   try {
     res.json(await updateAiMemberMatchStatus(req.params.id, req.body));
   } catch (error) {
     next(error);
   }
 });
+
+referralsRouter.get('/:id/feedback',localControl,async(req,res,next)=>{try{res.json(await listMemberFeedback(req.params.id));}catch(error){next(error);}});
+referralsRouter.patch('/:id/feedback/:feedbackId',localControl,async(req,res,next)=>{try{res.json(await setMemberFeedbackActive(req.params.id,req.params.feedbackId,req.body?.active));}catch(error){next(error);}});
+
+referralsRouter.post('/:id/feedback/:feedbackId/summarize',localControl,async(req,res,next)=>{try{res.json(await summarizeMemberFeedback(req.params.id,req.params.feedbackId));}catch(error){next(error);}});

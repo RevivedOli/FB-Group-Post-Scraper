@@ -326,7 +326,7 @@ async function callOllama(systemPrompt: string, userInput: string, provider: Pro
   };
 }
 
-async function callOpenAiResponses(systemPrompt: string, userInput: string, provider: ProviderRuntimeConfig, apiKey: string, timeoutSeconds: number): Promise<AiCallResult> {
+async function callOpenAiResponses(systemPrompt: string, userInput: string, provider: ProviderRuntimeConfig, apiKey: string, timeoutSeconds: number, outputSchema: OutputSchema): Promise<AiCallResult> {
   const startedAt = Date.now();
   const response = await fetch(`${provider.baseUrl}/responses`, {
     method: 'POST',
@@ -339,9 +339,9 @@ async function callOpenAiResponses(systemPrompt: string, userInput: string, prov
       text: {
         format: {
           type: 'json_schema',
-          name: assessmentJsonSchema.name,
+          name: outputSchema.name,
           strict: true,
-          schema: assessmentJsonSchema.schema,
+          schema: outputSchema.schema,
         },
       },
       input: [
@@ -354,7 +354,7 @@ async function callOpenAiResponses(systemPrompt: string, userInput: string, prov
     const errorBody = await response.text().catch(() => '');
     // Fall back to chat completions when Responses is unavailable for the account/model.
     if (response.status === 404 || /not supported|unsupported|unknown parameter|does not support/i.test(errorBody)) {
-      return callRemoteChatCompletions(systemPrompt, userInput, provider, apiKey, timeoutSeconds, true);
+      return callRemoteChatCompletions(systemPrompt, userInput, provider, apiKey, timeoutSeconds, true, outputSchema);
     }
     throw new Error(`OpenAI returned HTTP ${response.status}${errorBody ? `: ${truncateErrorBody(errorBody)}` : ''}.`);
   }
@@ -395,6 +395,7 @@ async function callRemoteChatCompletions(
   apiKey: string,
   timeoutSeconds: number,
   useJsonSchema: boolean,
+  outputSchema: OutputSchema,
 ): Promise<AiCallResult> {
   const startedAt = Date.now();
   // OpenAI GPT-5.x models reject temperature:0 and only accept the default.
@@ -408,7 +409,7 @@ async function callRemoteChatCompletions(
     max_completion_tokens: provider.model === 'gpt-6-luna' ? 2000 : 900,
     ...(provider.provider === 'openai' && provider.model === 'gpt-6-luna' ? {reasoning_effort:'none'} : {}),
     response_format: useJsonSchema
-      ? { type: 'json_schema', json_schema: assessmentJsonSchema }
+      ? { type: 'json_schema', json_schema: outputSchema }
       : { type: 'json_object' },
   };
   if (provider.provider !== 'openai') payload.temperature = 0;
@@ -449,7 +450,9 @@ async function callRemoteChatCompletions(
   return { text, usage: withCost(usage, provider.pricing) };
 }
 
-export async function callAiProvider(systemPrompt: string, userInput: string, provider: ProviderRuntimeConfig, timeoutSeconds: number): Promise<AiCallResult> {
+export interface OutputSchema { name: string; strict: boolean; schema: Record<string, unknown> }
+
+export async function callAiProvider(systemPrompt: string, userInput: string, provider: ProviderRuntimeConfig, timeoutSeconds: number, outputSchema: OutputSchema = assessmentJsonSchema): Promise<AiCallResult> {
   if (provider.provider === 'ollama') {
     return callOllama(systemPrompt, userInput, provider, timeoutSeconds);
   }
@@ -461,9 +464,9 @@ export async function callAiProvider(systemPrompt: string, userInput: string, pr
     throw new Error(`No ${provider.label} API key is saved. Add it in Settings before processing the queue.`);
   }
   if (provider.provider === 'openai') {
-    return callOpenAiResponses(systemPrompt, userInput, provider, apiKey, timeoutSeconds);
+    return callOpenAiResponses(systemPrompt, userInput, provider, apiKey, timeoutSeconds, outputSchema);
   }
-  return callRemoteChatCompletions(systemPrompt, userInput, provider, apiKey, timeoutSeconds, provider.provider !== 'custom');
+  return callRemoteChatCompletions(systemPrompt, userInput, provider, apiKey, timeoutSeconds, provider.provider !== 'custom', outputSchema);
 }
 
 export { assessmentJsonSchema, truncateErrorBody };

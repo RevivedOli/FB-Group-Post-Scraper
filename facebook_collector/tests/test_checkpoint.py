@@ -226,3 +226,40 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaises(CollectorError):
                 with self.db.lock('group:123'):
                     pass
+
+
+class KnownStreakTests(CheckpointTests):
+    def test_stops_across_pages_without_advancing_complete_coverage(self):
+        saved=[post(str(i)) for i in range(100,120)]
+        self.app([Page(saved,False,None)]).scan('123',stop_after_known=0)
+        before=self.checkpoint()['coverage_end']
+        result=self.app([Page(saved[:6],True,'next'),Page(saved[6:12],True,'more'),Page([post('999')],False,None)]).scan('123')
+        self.assertEqual((result['stop_reason'],result['posts_fetched'],result['pages']),('known_post_streak',10,2))
+        self.assertFalse(result['coverage_complete'])
+        self.assertEqual(self.checkpoint()['coverage_end'],before)
+
+    def test_new_post_resets_nine_known_and_stops_at_next_ten(self):
+        saved=[post(str(i)) for i in range(100,120)]
+        self.app([Page(saved,False,None)]).scan('123',stop_after_known=0)
+        records=saved[:9]+[post('999')]+saved[9:19]+[post('998')]
+        result=self.app([Page(records,False,None)]).scan('123')
+        self.assertEqual(result['new_posts'],1)
+        self.assertEqual(result['posts_fetched'],20)
+        self.assertEqual(result['consecutive_known'],10)
+        self.assertEqual(result['stop_reason'],'known_post_streak')
+
+    def test_repeated_same_post_does_not_advance_streak(self):
+        self.app([Page([post()],False,None)]).scan('123')
+        result=self.app([Page([post()]*15+[post('999')],False,None)]).scan('123')
+        self.assertEqual(result['new_posts'],1)
+        self.assertEqual(result['stop_reason'],'feed_end')
+
+    def test_disable_and_invalid_threshold(self):
+        for value in [-1,1.5,True]:
+            with self.assertRaises(CollectorError):
+                self.app([]).scan('123',stop_after_known=value)
+        saved=[post(str(i)) for i in range(100,112)]
+        self.app([Page(saved,False,None)]).scan('123',stop_after_known=0)
+        result=self.app([Page(saved+[post('999')],False,None)]).scan('123',stop_after_known=0)
+        self.assertEqual(result['new_posts'],1)
+        self.assertEqual(result['stop_reason'],'feed_end')
