@@ -1,16 +1,17 @@
+import {defaultWindow,normalizeWindow,nextAllowedStart,isAllowedStart,type CollectionWindow} from './collector-window.js';
 import { prisma } from '../db/prisma.js';
 import { collectorWorkerStatus, startCollectorWorker } from './collector-worker.service.js';
 import { normalizePacing, randomBetween, type CollectorPacing } from './collector-pacing.js';
 const key='collector.recurring.v1';
-export type RecurringConfig=CollectorPacing&{enabled:boolean;intervalMinutes:number;maxAgeHours:number;maxPages:number;limit:number;nextRunAt:string|null;lastStartedAt:string|null;lastError:string|null;enabledAt:string|null;lastFinishedAt:string|null};
-const defaults:RecurringConfig={...normalizePacing({}),enabled:false,intervalMinutes:60,maxAgeHours:7,maxPages:5,limit:50,nextRunAt:null,lastStartedAt:null,lastError:null,enabledAt:null,lastFinishedAt:null};
-export async function recurringConfig():Promise<RecurringConfig>{const row=await prisma.setting.findUnique({where:{key}});const saved=row?.value as Partial<RecurringConfig> ?? {};return {...defaults,...saved,...normalizePacing(saved)};}
+export type RecurringConfig=CollectorPacing&CollectionWindow&{enabled:boolean;intervalMinutes:number;maxAgeHours:number;maxPages:number;limit:number;nextRunAt:string|null;lastStartedAt:string|null;lastError:string|null;enabledAt:string|null;lastFinishedAt:string|null};
+const defaults:RecurringConfig={...normalizePacing({}),...defaultWindow,enabled:false,intervalMinutes:60,maxAgeHours:7,maxPages:5,limit:50,nextRunAt:null,lastStartedAt:null,lastError:null,enabledAt:null,lastFinishedAt:null};
+export async function recurringConfig():Promise<RecurringConfig>{const row=await prisma.setting.findUnique({where:{key}});const saved=row?.value as Partial<RecurringConfig> ?? {};return {...defaults,...saved,...normalizePacing(saved),...normalizeWindow(saved)};}
 async function store(value:RecurringConfig){await prisma.setting.upsert({where:{key},create:{key,value},update:{value}});return value;}
 export async function updateRecurring(input:Partial<RecurringConfig>){
   const previous=await recurringConfig();const patch={...input};
   if(input.intervalMinutes!==undefined&&input.intervalMinMinutes===undefined){patch.intervalMinMinutes=Number(input.intervalMinutes);patch.intervalMaxMinutes=Number(input.intervalMinutes);}
   const pacing=normalizePacing({...previous,...patch});
-  const value={...previous,...pacing,intervalMinutes:pacing.intervalMinMinutes};
+  const value={...previous,...pacing,...normalizeWindow({...previous,...input}),intervalMinutes:pacing.intervalMinMinutes};
   for(const field of ['maxAgeHours','maxPages','limit'] as const)if(input[field]!==undefined)value[field]=Number(input[field]);
   if(input.enabled!==undefined)value.enabled=Boolean(input.enabled);
 
@@ -18,6 +19,7 @@ export async function updateRecurring(input:Partial<RecurringConfig>){
   if(!Number.isInteger(value.maxPages)||value.maxPages<1||value.maxPages>20)throw new Error('Max pages per group must be a whole number between 1 and 20.');
   if(!Number.isInteger(value.limit)||value.limit<1||value.limit>500)throw new Error('Max posts per group must be a whole number between 1 and 500.');
   if(value.enabled&&(!previous.enabled||value.intervalMinMinutes!==previous.intervalMinMinutes||value.intervalMaxMinutes!==previous.intervalMaxMinutes)){value.nextRunAt=new Date(Date.now()+randomBetween(value.intervalMinMinutes,value.intervalMaxMinutes)*60000).toISOString();value.enabledAt=new Date().toISOString();}
+  if(value.enabled&&value.nextRunAt)value.nextRunAt=nextAllowedStart(value,new Date(Math.max(Date.now(),Date.parse(value.nextRunAt)))).toISOString();
   if(!value.enabled)value.nextRunAt=null;
   value.lastError=null;return store(value);
 }
@@ -31,11 +33,12 @@ export async function tickRecurring(){
     if(status.mode==='run'&&status.state==='stopped'&&stop&&(!config.enabledAt||new Date(stop.at).getTime()>=new Date(config.enabledAt).getTime())&&['restricted','authentication_required','authentication_unverified'].includes(stop.reason ?? '')){await store({...config,enabled:false,nextRunAt:null,lastError:'Collection paused: complete the Facebook login/security check before re-enabling the schedule.'});return;}
     if(['running','stopping'].includes(status.state))return;
     if(status.mode==='run'&&status.finishedAt&&(!config.lastFinishedAt||Date.parse(status.finishedAt)>Date.parse(config.lastFinishedAt))&&(!config.enabledAt||Date.parse(status.finishedAt)>=Date.parse(config.enabledAt))){
-      await store({...config,lastFinishedAt:status.finishedAt,nextRunAt:new Date(Date.now()+randomBetween(config.intervalMinMinutes,config.intervalMaxMinutes)*60000).toISOString()});return;
+      await store({...config,lastFinishedAt:status.finishedAt,nextRunAt:nextAllowedStart(config,new Date(Date.now()+randomBetween(config.intervalMinMinutes,config.intervalMaxMinutes)*60000)).toISOString()});return;
     }
     // Restart during a cycle: restore a full pause rather than replaying immediately.
-    if(!config.nextRunAt){await store({...config,nextRunAt:new Date(Date.now()+randomBetween(config.intervalMinMinutes,config.intervalMaxMinutes)*60000).toISOString()});return;}
+    if(!config.nextRunAt){await store({...config,nextRunAt:nextAllowedStart(config,new Date(Date.now()+randomBetween(config.intervalMinMinutes,config.intervalMaxMinutes)*60000)).toISOString()});return;}
     if(new Date(config.nextRunAt).getTime()>Date.now())return;
+    if(!isAllowedStart(config,new Date())){await store({...config,nextRunAt:nextAllowedStart(config,new Date()).toISOString()});return;}
     const now=new Date().toISOString();
     // Persist the next due time before dispatch, avoiding immediate replay on restart.
     await store({...config,lastStartedAt:now,nextRunAt:null,lastError:null});

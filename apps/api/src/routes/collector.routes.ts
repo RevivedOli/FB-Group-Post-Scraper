@@ -1,3 +1,4 @@
+import {listCycles} from '../services/collector-history.service.js';
 import { Router } from 'express';
 import { localControl } from './local-control.js';
 import { collectorBridgeStatus, syncCollectorBridge } from '../services/collector-bridge.service.js';
@@ -19,3 +20,5 @@ collectorRouter.get('/schedule',async(_req,res,next)=>{try{res.json(await recurr
 collectorRouter.patch('/schedule',async(req,res,next)=>{try{res.json(await updateRecurring(req.body));}catch(error){next(error);}});
 
 collectorRouter.get('/schedule/estimate',async(req,res,next)=>{try{res.json(await getCycleEstimate(Number(req.query.maxPages ?? 5),Number(req.query.limit ?? 50),Object.fromEntries(['requestMinSeconds','requestMaxSeconds','pageMinSeconds','pageMaxSeconds','groupMinSeconds','groupMaxSeconds','groupDeadlineSeconds'].filter(key=>req.query[key]!==undefined).map(key=>[key,Number(req.query[key])]))));}catch(error){next(error);}});
+
+collectorRouter.get('/history',async(req,res,next)=>{try{res.json(await listCycles(Number(req.query.page??1),Number(req.query.pageSize??10),['running','stopping'].includes(collectorWorkerStatus().state)?collectorWorkerStatus().startedAt:null));}catch(error){next(error);}});

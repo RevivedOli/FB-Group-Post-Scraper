@@ -1,3 +1,5 @@
+import {normalizeWindow,type CollectionWindow} from './collector-window.js';
+import {newCycleRecord,saveCycle,type CycleRecord} from './collector-history.service.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,11 +10,14 @@ import { normalizePacing, type CollectorPacing } from './collector-pacing.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 let child:ChildProcess|undefined;
 let starting = false;
+let history:CycleRecord|undefined;
+let historyWrites=Promise.resolve();
+function persistHistory(){if(!history)return;const snapshot=structuredClone(history);historyWrites=historyWrites.then(()=>saveCycle(snapshot)).catch(()=>{job.events.unshift({type:'warning',message:'Collection history could not be saved.',at:new Date().toISOString()});});}
 let stopTimer:ReturnType<typeof setTimeout>|undefined;
 type Event = { type:string; ui_id?:string; name?:string; status?:string; message?:string; reason?:string; account_id?:string; facebook_profile_id?:string; result?:Record<string,unknown>; at:string };
 let job = { state:'idle', mode:'test', currentGroup:null as string|null, accountId:null as string|null, profileId:null as string|null, total:0, completed:0, events:[] as Event[], startedAt:null as string|null, finishedAt:null as string|null };
 export function collectorWorkerStatus() { return {...job,events:[...job.events]}; }
-function event(value:Omit<Event,'at'>) { job.events.unshift({...value,at:new Date().toISOString()}); job.events = job.events.slice(0,100); }
+function event(value:Omit<Event,'at'>) { job.events.unshift({...value,at:new Date().toISOString()}); job.events = job.events.slice(0,100); if(history)history.events.push({...value,at:job.events[0].at}); }
 export function stopCollectorWorker() {
   if (child && job.state!=='stopping') {
     const stoppingChild=child;
@@ -41,6 +46,8 @@ export async function startCollectorWorker(input:Partial<CollectorPacing>&{mode?
       pacing, data_dir:process.env.FACEBOOK_COLLECTOR_DATA_DIR,
       groups:groups.map(group=>({ui_id:group.id,name:group.friendlyName,reference:group.facebookGroupId && /^\d+$/.test(group.facebookGroupId) ? group.facebookGroupId : group.canonicalGroupUrl})),
     };
+    history=newCycleRecord(job,{maxAgeHours,maxPages,limit,stopAfterKnown:10,stopAtCutoff:false,...pacing,...normalizeWindow(savedPacing?.value as Partial<CollectionWindow>??{})});
+    try{await saveCycle(history);}catch(error){job.state='failed';job.finishedAt=new Date().toISOString();throw error;}
     const processChild=spawn(process.env.COLLECTOR_PYTHON ?? path.join(root,'facebook_collector/.venv/bin/python'),['-m','facebook_collector.ui_worker'],{cwd:root,stdio:['pipe','pipe','pipe']});
     child=processChild;
     let updates=Promise.resolve();
@@ -53,6 +60,7 @@ export async function startCollectorWorker(input:Partial<CollectorPacing>&{mode?
       if (value.type==='started') { job.accountId=value.account_id ?? null;job.profileId=value.facebook_profile_id ?? null; }
       if (value.type==='group_started') job.currentGroup=value.name ?? null;
       if (value.type==='stopped') job.state=value.reason==='cancelled' ? 'cancelled' : 'stopped';
+      if(history){history.completed=job.completed+(value.type==='group_result'?1:0);persistHistory();}
       if (value.type==='group_result') {
         job.completed++;
         updates=updates.then(async()=>{
@@ -73,6 +81,7 @@ export async function startCollectorWorker(input:Partial<CollectorPacing>&{mode?
       if (job.state==='running') job.state=code===0 ? 'completed' : 'failed';
       if (job.state==='stopping') job.state='cancelled';
       job.currentGroup=null;job.finishedAt=new Date().toISOString();child=undefined;
+      if(history){history.state=job.state;history.completed=job.completed;history.finishedAt=job.finishedAt;persistHistory();}
     }); });
     processChild.stdin!.end(JSON.stringify(payload));
     return collectorWorkerStatus();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, CardContent, Stack, TextField, Typography } from '@mui/material';
 import { apiGet, apiSend } from '../api/client';
-type Worker = {state:string;mode:string;currentGroup:string|null;accountId:string|null;profileId:string|null;completed:number;total:number;events:{type:string;name?:string;status?:string;message?:string;reason?:string;at:string;result?:{posts_fetched?:number;new_posts?:number;pages?:number;sample_posts?:number;stop_reason?:string}}[]};
+type Worker = {startedAt:string|null;finishedAt:string|null;state:string;mode:string;currentGroup:string|null;accountId:string|null;profileId:string|null;completed:number;total:number;events:{type:string;name?:string;status?:string;message?:string;reason?:string;at:string;result?:{posts_fetched?:number;new_posts?:number;pages?:number;sample_posts?:number;stop_reason?:string}}[]};
 export function CollectorWorkerPanel() {
   const [worker,setWorker]=useState<Worker>();
   const [error,setError]=useState<string>();
@@ -31,6 +31,7 @@ export function CollectorWorkerPanel() {
     </Stack>
     {error&&<Alert severity="error">{error}</Alert>}
     <Typography>Status: {worker?.state ?? 'loading'} · {worker?.completed ?? 0}/{worker?.total ?? 0} groups · {worker?.currentGroup ?? 'Idle'}</Typography>
+    {worker?.startedAt&&<Typography variant="body2">Started {new Date(worker.startedAt).toLocaleString('en-GB')} · Ended {worker.finishedAt?new Date(worker.finishedAt).toLocaleString('en-GB'):'In progress'} · Duration {Math.floor(((worker.finishedAt?Date.parse(worker.finishedAt):Date.now())-Date.parse(worker.startedAt))/60000)}m {Math.floor(((worker.finishedAt?Date.parse(worker.finishedAt):Date.now())-Date.parse(worker.startedAt))/1000)%60}s</Typography>}
     {worker?.accountId&&<Typography>Collector login: {worker.accountId} · Facebook profile: {worker.profileId ?? 'unknown'}</Typography>}
     {worker?.events.slice(0,20).map((event,index)=><Typography key={`${event.at}-${index}`} variant="body2">
       {new Date(event.at).toLocaleTimeString()} · {event.name ? `${event.name}: ` : ''}{event.status ?? event.reason ?? event.type}

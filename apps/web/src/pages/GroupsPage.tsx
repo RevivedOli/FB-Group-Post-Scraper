@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Box,Tab,Tabs,
   Button,
   Card,
   CardContent,
@@ -13,6 +14,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import {CollectorHistory} from '../components/CollectorHistory';
 import { CollectorWorkerPanel } from '../components/CollectorWorkerPanel';
 import { apiGet, apiSend } from '../api/client';
 
@@ -83,6 +85,7 @@ function matchesSearch(group: Group, query: string) {
 }
 
 export function GroupsPage() {
+  const [historyTab,setHistoryTab]=useState(0);
   const [numericIds, setNumericIds] = useState<Record<string,string>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [drafts, setDrafts] = useState<Record<string, LimitDraft>>({});
@@ -278,6 +281,9 @@ export function GroupsPage() {
         <Button variant="contained" onClick={openAdd}>Add Group</Button>
       </Stack>
 
+      <Tabs value={historyTab} onChange={(_,value)=>setHistoryTab(value)}><Tab label="Groups"/><Tab label="Collection history"/></Tabs>
+      {historyTab===1&&<CollectorHistory/>}
+      <Box sx={{display:historyTab===0?'block':'none'}}><Stack spacing={3}>
       <CollectorWorkerPanel />
       {message && <Alert severity="success" onClose={() => setMessage(undefined)}>{message}</Alert>}
       {error && <Alert severity="error" onClose={() => setError(undefined)}>{error}</Alert>}
@@ -431,6 +437,7 @@ export function GroupsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      </Stack></Box>
     </Stack>
   );
 }

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-const mocks=vi.hoisted(()=>({spawn:vi.fn(),findSetting:vi.fn(),findMany:vi.fn(),update:vi.fn(),sync:vi.fn()}));
+const mocks=vi.hoisted(()=>({spawn:vi.fn(),findSetting:vi.fn(),saveSetting:vi.fn(),findMany:vi.fn(),update:vi.fn(),sync:vi.fn()}));
 vi.mock('node:child_process',()=>({spawn:mocks.spawn}));
-vi.mock('../../src/db/prisma.js',()=>({prisma:{setting:{findUnique:mocks.findSetting},group:{findMany:mocks.findMany,update:mocks.update}}}));
+vi.mock('../../src/db/prisma.js',()=>({prisma:{setting:{findUnique:mocks.findSetting,upsert:mocks.saveSetting},group:{findMany:mocks.findMany,update:mocks.update}}}));
 vi.mock('../../src/services/collector-bridge.service.js',()=>({syncCollectorBridge:mocks.sync}));
 import {collectorWorkerStatus,startCollectorWorker,stopCollectorWorker} from '../../src/services/collector-worker.service.js';
 let child:EventEmitter&{stdout:PassThrough;stderr:PassThrough;stdin:PassThrough;kill:ReturnType<typeof vi.fn>};
@@ -23,6 +23,10 @@ describe('sequential collector worker control',()=>{
     child.emit('close',0);await flush();
     expect(mocks.update).toHaveBeenCalled();expect(mocks.sync).toHaveBeenCalled();
     expect(collectorWorkerStatus().state).toBe('completed');
+    const saved=mocks.saveSetting.mock.calls.at(-1)?.[0].update.value;
+    expect(saved.state).toBe('completed');expect(saved.finishedAt).toBeTruthy();
+    expect(saved.settings.stopAfterKnown).toBe(10);
+    expect(saved.events.some((event:{type:string})=>event.type==='group_result')).toBe(true);
   });
   it('signals cancellation and leaves the worker stopped',async()=>{
     await startCollectorWorker({mode:'run'});stopCollectorWorker();expect(child.kill).toHaveBeenCalledWith('SIGINT');child.emit('close',130);await flush();
